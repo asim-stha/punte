@@ -1,0 +1,15 @@
+/* Extra styles: login page, password and number inputs, small screens */
+input[type=password], input[inputmode=numeric] {
+  width: 100%; min-height: 44px; padding: 0 14px; border: 3px solid var(--ink); border-radius: 16px;
+  background: var(--in); color: var(--fg); box-shadow: 3px 3px 0 var(--ink);
+}
+input[type=password]:focus, input[inputmode=numeric]:focus { outline: 3px solid var(--y); outline-offset: 2px; }
+.login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
+.login { width: min(380px, 100%); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; }
+  .side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; padding: 10px; }
+  .side .sfoot, .side .sp { display: none; }
+  .logo { padding: 0 8px; font-size: 28px; }
+}
