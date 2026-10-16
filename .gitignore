@@ -1,0 +1,14 @@
+# secrets: never commit these
+.env
+secrets.h
+
+# generated files
+node_modules/
+dist/
+data/
+backups/
+
+# editor and system files
+.vscode/
+.DS_Store
+Thumbs.db
