@@ -16,7 +16,11 @@ KEEP_DAYS=14                     # backups older than this are deleted by azure
 
 # 1. resource group: one folder in azure that holds everything, delete it to remove everything
 echo "[1/5] resource group $RG"
-az group create --name "$RG" --location "$LOCATION" --output none
+if az group show --name "$RG" --output none 2>/dev/null; then
+  echo "  $RG already exists, skipping"
+else
+  az group create --name "$RG" --location "$LOCATION" --output none
+fi
 
 # 2. storage account and a private container for database backups
 echo "[2/5] storage for backups"
