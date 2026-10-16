@@ -1,0 +1,15 @@
+# uptime: every 30 minutes, asks the live website for /healthz from outside azure
+# a red run means the site, the backend or the database is down (github emails about failed runs)
+name: uptime
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  health:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Ask /healthz
+        run: curl -fsS --retry 3 --retry-delay 10 --max-time 20 https://punte-cybersquadnp.japaneast.cloudapp.azure.com/healthz
