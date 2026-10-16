@@ -1,0 +1,98 @@
+# punte: 4 containers
+#   proxy -> frontend (the website)
+#   proxy -> backend -> database (private network, no public port)
+# start: docker compose up -d --build   (run it inside this folder)
+name: punte
+
+services:
+  database:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: punte
+      POSTGRES_USER: punte
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ../database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    networks: [private]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U punte -d punte"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ../backend
+    restart: unless-stopped
+    environment:
+      APP_PASSWORD: ${APP_PASSWORD:?set APP_PASSWORD in .env}
+      ESP_TOKEN: ${ESP_TOKEN:?set ESP_TOKEN in .env}
+      # database connection
+      PGHOST: database
+      PGUSER: punte
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: punte
+      STORAGE: ${STORAGE:-postgres}
+      # optional second copy of the data (supabase)
+      STORAGE_MIRROR: ${STORAGE_MIRROR:-}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+      # ai and login
+      AUTH: ${AUTH:-password}
+      AI_PROVIDER: ${AI_PROVIDER:-ollama}
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+    depends_on:
+      database:
+        condition: service_healthy
+    networks: [private, public]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  frontend:
+    build: ../frontend
+    restart: unless-stopped
+    networks: [public]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    volumes:
+      - ../proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks: [public]
+
+  # ollama on the server is optional and off by default
+  # turn it on with: docker compose --profile server-ai up -d
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["server-ai"]
+    restart: unless-stopped
+    volumes:
+      - ollama-models:/root/.ollama
+    networks: [public]
+
+networks:
+  public: {}
+  private:
+    internal: true        # no internet, only the backend and the database are on it
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:
+  ollama-models:
