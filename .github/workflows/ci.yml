@@ -1,0 +1,86 @@
+# ci: runs on every push and pull request
+# 1. backend tests (with a real postgres)  2. frontend tests  3. build and start the whole stack
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: punte
+          POSTGRES_USER: punte
+          POSTGRES_PASSWORD: test-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U punte -d punte"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: punte
+      PGPASSWORD: test-only
+      PGDATABASE: punte
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Create the table
+        run: psql -v ON_ERROR_STOP=1 -f database/init.sql
+      - run: npm ci
+        working-directory: backend
+      - run: npm test
+        working-directory: backend
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+
+  stack:
+    # builds the images and starts all four containers, then asks the proxy for /healthz
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make a throwaway .env
+        working-directory: docker
+        run: |
+          cat > .env <<ENV
+          DOMAIN=localhost
+          APP_PASSWORD=ci-password
+          ESP_TOKEN=ci-token
+          POSTGRES_PASSWORD=ci-postgres
+          ENV
+      - name: Build and start
+        working-directory: docker
+        run: docker compose up -d --build --wait --wait-timeout 180
+      - name: Check the whole chain (proxy -> backend -> database)
+        run: curl -fsSk --retry 10 --retry-delay 3 --retry-all-errors https://localhost/healthz
+      - name: Show logs if something failed
+        if: failure()
+        working-directory: docker
+        run: docker compose ps && docker compose logs --tail 60
+      - name: Stop
+        if: always()
+        working-directory: docker
+        run: docker compose down -v
