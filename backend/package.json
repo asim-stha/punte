@@ -1,0 +1,21 @@
+{
+  "name": "punte-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Backend for the Punte desktop buddy: REST API, storage, AI proxy and ESP32 relay",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --env-file=../docker/.env server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@vladmandic/face-api": "^1.7.14",
+    "express": "^4.21.2",
+    "pg": "^8.13.0",
+    "ws": "^8.18.0"
+  }
+}
