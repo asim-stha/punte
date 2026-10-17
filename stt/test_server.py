@@ -48,6 +48,11 @@ class SttTest(unittest.TestCase):
         except urllib.error.HTTPError as e:
             return e
 
+    def test_library_loads(self):
+        # the real library must import (a missing package would only show up when the image is built)
+        from faster_whisper import WhisperModel
+        self.assertTrue(callable(WhisperModel))
+
     def test_health(self):
         self.assertEqual(urllib.request.urlopen(self.base + '/health').status, 200)
 
