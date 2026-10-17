@@ -7,7 +7,9 @@ export const DEFAULTS = {
   cam: true,          // camera on
   mic: true,          // microphone allowed
   faceSource: 'laptop', // camera used for faces: 'laptop' = this computer, 'robot' = the ESP32-CAM
-  track: false,       // head follows the face (only if the camera is on the robot's head)
+  lookAt: 'face',     // where the head looks: 'face' = follows your face, 'mouse' = follows the mouse, 'off'
+  bye: true,          // say goodbye when a known person leaves
+  idle: true,         // do small fun things when it is quiet
   rate: 1, voice: '',
   aiSource: 'local',  // 'local' = this browser asks Ollama on this computer, 'server' = the server asks Ollama
   ol: 'http://localhost:11434',

@@ -2,7 +2,7 @@
 // The views only show what this hook returns.
 import { useEffect, useRef, useState } from 'react';
 import { api, AuthError } from '../api';
-import { EX, robotCommand, openCommand, wakeNames, wakeSplit, systemPrompt, parseReply, keepFacts } from '../lib/commands';
+import { EX, robotCommand, openCommand, smallTalk, greeting, farewell, idleAction, wakeNames, wakeSplit, systemPrompt, parseReply, keepFacts } from '../lib/commands';
 
 const MODELS = '/vendor/face-api/model/';
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -77,7 +77,8 @@ export function useBuddy({ S, onLoggedOut }) {
     lastSeen: 0, greetOK: false, lastGreeted: undefined, lastRec: 0, lastSend: 0,
     rec: null, ptt: null, listening: false, mutedUntil: 0, waiting: false, lastSaid: '',
     cloudDead: false, cloudPause: 0,
-    rc: null, frameAt: 0, decoding: false, camOn: false, watching: false
+    rc: null, frameAt: 0, decoding: false, camOn: false, watching: false,
+    lastP: 0, lastAct: Date.now(), lastIdle: 0, lastBye: 0
   }).current;
   const A = useRef({});                                // latest copies of the functions below
   const videoRef = useRef(el => { x.video = el; }).current;   // created once, so React does not reset it
@@ -168,6 +169,24 @@ export function useBuddy({ S, onLoggedOut }) {
 
   useEffect(() => { if (x.listening) stopListening(); }, [S.mode, S.mic]);   // changing the voice mode turns the microphone off
   useEffect(() => { refreshBadge(); }, [listening, holding]);
+  useEffect(() => {                                   // head follows the mouse
+    if (S.lookAt !== 'mouse') return;
+    const move = e => aim((e.clientX / innerWidth - 0.5) * 120);
+    addEventListener('mousemove', move);
+    return () => removeEventListener('mousemove', move);
+  }, [S.lookAt]);
+  useEffect(() => {                                   // something small and fun when it is quiet
+    const t = setInterval(() => {
+      const now = Date.now();
+      if (!x.started || !live.current.S.idle || x.speaking || x.thinking || x.ptt) return;
+      if (now - x.lastAct < 180000 || now - x.lastIdle < 120000) return;
+      x.lastIdle = now;
+      const a = idleAction(Math.random(), Math.random(), now - x.lastSeen < 180000);
+      a.cmds.forEach(c => A.current.send(c));
+      if (a.line) A.current.say(a.line, a.tag);
+    }, 15000);
+    return () => clearInterval(t);
+  }, []);
   useEffect(() => { sendView(); }, [viewing, started, cam.on, S.faceSource]);
   useEffect(() => { if (x.camOn) { stopCamera(); startCamera(); } }, [S.faceSource]);   // other camera chosen: restart
 
@@ -205,6 +224,14 @@ export function useBuddy({ S, onLoggedOut }) {
     x.cur = undefined; setWho('-'); setCam({ on: false, note: 'Camera is off' });
   }
 
+  // The head turns to an angle (not step by step), because the camera does not move with the head.
+  function aim(angle) {
+    const now = Date.now();
+    if (Math.abs(angle - x.lastP) < 6 || now - x.lastSend < 250) return;
+    x.lastSend = now; x.lastP = Math.round(angle);
+    A.current.send('p:' + x.lastP);
+  }
+
   function runLoop() {
     const id = ++x.loop;
     const tick = async () => {
@@ -218,9 +245,15 @@ export function useBuddy({ S, onLoggedOut }) {
             if (now - x.lastSeen > (+s.away || 2) * 60000) x.greetOK = true;   // away long enough: greet again
             x.lastSeen = now;
             const b = d.box, err = (b.x + b.width / 2) / (V.videoWidth || V.width) - 0.5;
-            if (s.track && Math.abs(err) > 0.07 && now - x.lastSend > 300) { A.current.send('n:' + (err * GAIN * SIGN).toFixed(1)); x.lastSend = now; }
+            if (s.lookAt === 'face') aim(err * 2 * GAIN * SIGN);
             if (now - x.lastRec > 3000) { x.lastRec = now; await A.current.recognize(); }
-          } else if (x.cur !== undefined && now - x.lastRec > 8000) { x.cur = undefined; setWho('-'); }
+          } else {
+            if (s.lookAt === 'face' && x.lastP !== 0 && now - x.lastSeen > 6000) { x.lastP = 0; A.current.send('p:0'); }   // nobody there: look straight again
+            if (x.cur !== undefined && now - x.lastRec > 8000) {
+              if (x.cur && s.bye && now - x.lastBye > 60000) { x.lastBye = now; A.current.say(farewell(x.cur, new Date().getHours()), 'happy'); }
+              x.cur = undefined; setWho('-');
+            }
+          }
         }
       } catch (e) { /* skip this picture */ }
       if (id === x.loop) requestAnimationFrame(tick);
@@ -242,7 +275,8 @@ export function useBuddy({ S, onLoggedOut }) {
     // Only people who were saved with "Learn face" are greeted. Unknown faces are never saved.
     if (best && live.current.S.greet && (x.greetOK || best !== x.lastGreeted)) {
       x.greetOK = false; x.lastGreeted = best;
-      A.current.say('Hi ' + best + '!', 'happy');
+      x.lastAct = Date.now();
+      A.current.say(greeting(best, new Date().getHours()), 'happy');
     }
   }
 
@@ -268,7 +302,7 @@ export function useBuddy({ S, onLoggedOut }) {
 
   async function connect() {
     if (started) return;
-    setStarted(true);
+    setStarted(true); x.started = true; x.lastAct = Date.now();
     try { speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch (e) { /* unlocks speech after a click */ }
     if (live.current.S.cam) await startCamera();
     else setCam({ on: false, note: 'Camera is off' });
@@ -307,11 +341,13 @@ export function useBuddy({ S, onLoggedOut }) {
   }
 
   async function route(text) {
-    msg('me', text);
+    msg('me', text); x.lastAct = Date.now();
     const o = openCommand(text);                      // checked first, so "play music on youtube" is not the robot's own song
     if (o) return openSite(o);
     const c = robotCommand(text);
     if (c) { send(c.cmd); if (c.say) say(c.say); return; }
+    const t = smallTalk(text, x.cur, new Date().getHours());     // hello, bye, thanks and kind words are answered here, without the AI
+    if (t) return say(t.say, t.tag);
     await ask(text);
   }
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { robotCommand, openCommand, wakeNames, wakeSplit, parseReply, systemPrompt, people } from '../src/lib/commands.js';
+import { robotCommand, openCommand, wakeNames, wakeSplit, parseReply, systemPrompt, people, greeting, farewell, smallTalk, idleAction } from '../src/lib/commands.js';
 
 test('robot commands', () => {
   assert.deepEqual(robotCommand('please turn left'), { cmd: 'r:-45' });
@@ -58,4 +58,45 @@ test('prompt and people', () => {
   assert.match(systemPrompt('Sam', ['likes tea']), /Person in front of you: Sam[\s\S]*- likes tea/);
   assert.match(systemPrompt(undefined, []), /unknown/);
   assert.deepEqual(people([{ n: 'A' }, { n: 'B' }, { n: 'A' }]), [{ name: 'A', samples: 2 }, { name: 'B', samples: 1 }]);
+});
+test('greeting and goodbye follow the time of day', () => {
+  assert.equal(greeting('Sam', 8), 'Good morning, Sam!');
+  assert.equal(greeting('Sam', 14), 'Good afternoon, Sam!');
+  assert.equal(greeting(undefined, 19), 'Good evening!');
+  assert.match(greeting('Sam', 2), /up late/);
+  assert.match(farewell('Sam', 10), /Bye, Sam, have a nice day/);
+  assert.match(farewell('Sam', 19), /good evening/);
+  assert.match(farewell('Sam', 23), /Good night, Sam/);
+});
+
+test('small talk is answered without the AI', () => {
+  assert.equal(smallTalk('hello', 'Sam', 9).say, 'Good morning, Sam!');
+  assert.equal(smallTalk('Thanks!', null, 9).say, "You're welcome!");
+  assert.match(smallTalk('good night', 'Sam', 23).say, /Good night, Sam/);
+  assert.equal(smallTalk('good night', 'Sam', 23).tag, 'sleepy');
+  assert.match(smallTalk('bye bye', null, 10).say, /have a nice day/);
+  assert.match(smallTalk('how are you?', null, 10).say, /doing great/);
+  assert.equal(smallTalk("I'm so tired today", null, 10).tag, 'sad');
+  assert.match(smallTalk('i feel really stressed', null, 10).say, /deep breath/);
+  assert.match(smallTalk('I had a terrible day', null, 10).say, /sorry today was hard/);
+  assert.match(smallTalk("i'm lonely", null, 10).say, /someone you trust/);
+});
+
+test('small talk does not fire on other sentences', () => {
+  assert.equal(smallTalk("I'm not sad", null, 10), null);
+  assert.equal(smallTalk('am i sad', null, 10), null);
+  assert.equal(smallTalk('hello can you tell me about the history of korea', null, 10), null);
+  assert.equal(smallTalk('thanks for the help with my homework today', null, 10), null);
+  assert.equal(smallTalk('what is the weather', null, 10), null);
+  assert.equal(smallTalk('', null, 10), null);
+});
+
+test('idle actions use only commands the server accepts', () => {
+  const ok = /^[xtnrpmlhuc]:-?\d{1,4}(\.\d{1,2})?$/;
+  for (let i = 0; i < 20; i++) {
+    const a = idleAction(i / 20, ((i * 7) % 20) / 20, i % 2 === 0);
+    assert.ok(a.cmds.length > 0 && a.cmds.every(c => ok.test(c)));
+    assert.equal(!!a.line, i % 2 === 0);             // a line is spoken only when someone is near
+  }
+  assert.ok(idleAction(0.999, 0.999, true).line);    // top of the range does not run off the list
 });

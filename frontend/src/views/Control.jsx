@@ -1,7 +1,6 @@
 // control page: expressions, head, body and songs
 import { useState } from 'react';
 import Face from '../components/Face';
-import Toggle from '../components/Toggle';
 import { NAMES } from '../lib/commands';
 
 export default function Control({ b, S, set, hidden }) {
@@ -28,10 +27,12 @@ export default function Control({ b, S, set, hidden }) {
           <button className="btn" onClick={() => b.send('h:-18')}>Look down</button>
           <button className="btn" onClick={() => b.send('c:2')}>Chirp</button>
         </div>
-        <div className="line" style={{ marginTop: 10 }}>
-          <div>Auto-track face<small>Only if the camera is on the robot's head</small></div>
-          <Toggle on={S.track} onChange={v => set({ track: v })} label="Auto-track face" />
-        </div>
+        <label htmlFor="look">Look at</label>
+        <select id="look" value={S.lookAt} onChange={e => set({ lookAt: e.target.value })}>
+          <option value="face">My face</option>
+          <option value="mouse">The mouse</option>
+          <option value="off">Nothing (stay still)</option>
+        </select>
       </div>
       <div className="card">
         <h2>Music</h2>

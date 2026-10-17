@@ -121,3 +121,71 @@ export function people(faces) {
   for (const f of faces) map.set(f.n, (map.get(f.n) || 0) + 1);
   return [...map].map(([name, samples]) => ({ name, samples }));
 }
+
+// ---------- greetings, goodbyes and small talk (no AI needed, so they work offline and answer fast) ----------
+const nameBit = n => (n ? ', ' + n : '');
+
+export function greeting(name, hour) {
+  if (hour >= 5 && hour < 12) return 'Good morning' + nameBit(name) + '!';
+  if (hour >= 12 && hour < 18) return 'Good afternoon' + nameBit(name) + '!';
+  if (hour >= 18 && hour < 22) return 'Good evening' + nameBit(name) + '!';
+  return 'Hi' + nameBit(name) + ', you are up late!';
+}
+
+export function farewell(name, hour) {
+  if (hour >= 21 || hour < 5) return 'Good night' + nameBit(name) + '! Sleep well.';
+  if (hour >= 18) return 'Bye' + nameBit(name) + ', have a good evening!';
+  return 'Bye' + nameBit(name) + ', have a nice day!';
+}
+
+// feelings the robot answers with sympathy: [words, answer, face]
+const FEELINGS = [
+  [['sad', 'lonely', 'depressed', 'upset'], "I'm sorry you feel that way. I'm here with you. If it stays heavy, please talk to a friend or someone you trust.", 'sad'],
+  [['tired', 'exhausted', 'sick'], 'You sound worn out. Please rest a little and drink some water.', 'sad'],
+  [['stressed', 'anxious', 'worried', 'scared'], 'Take a slow, deep breath with me. You can do this, one small step at a time.', 'love'],
+  [['angry'], 'That sounds hard. I am listening if you want to talk about it.', 'sad'],
+  [['bored'], 'Bored? I can play a song for you. Just say play a song.', 'happy']
+];
+const FEEL_WORDS = FEELINGS.flatMap(f => f[0]).join('|');
+const FEEL = new RegExp("\\b(?:i am|i'm|im|i feel|i felt|feeling)\\s+(?:so |very |really |a bit |kind of |pretty |just )?(" + FEEL_WORDS + ')\\b');
+const NOT_FEEL = new RegExp("\\b(?:not|never|don't|dont|isn't|aren't)\\s+(?:\\w+\\s+)?(?:" + FEEL_WORDS + ')\\b');
+
+// Short things people say that Punte can answer by itself. Gives { say, tag } or null.
+export function smallTalk(text, name, hour) {
+  const s = String(text).toLowerCase().replace(/[!?.,]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!s) return null;
+  const words = s.split(' ').length;
+  if (words <= 4 && /^(?:thank you|thanks|thx)\b/.test(s)) return { say: "You're welcome!", tag: 'happy' };
+  if (words <= 5 && /^(?:good ?bye|bye(?: bye)?|see you(?: later| soon| tomorrow)?|good night|i have to go|i gotta go)\b/.test(s)) {
+    return { say: farewell(name, hour), tag: hour >= 21 || hour < 5 ? 'sleepy' : 'happy' };
+  }
+  if (words <= 4 && /^(?:hello|hi|hey|yo|good (?:morning|afternoon|evening))\b/.test(s)) return { say: greeting(name, hour), tag: 'happy' };
+  if (/^how are you(?: doing| today)?$/.test(s)) return { say: "I'm doing great, thanks for asking! How are you?", tag: 'happy' };
+  if (words <= 10 && !ASKING.test(s)) {
+    if (/\b(?:bad|terrible|rough|awful|horrible|long) day\b/.test(s) && !NOT_FEEL.test(s)) {
+      return { say: "I'm sorry today was hard. Tomorrow can be better. I'm here with you.", tag: 'sad' };
+    }
+    const m = s.match(FEEL);
+    if (m && !NOT_FEEL.test(s)) {
+      const f = FEELINGS.find(x => x[0].includes(m[1]));
+      return { say: f[1], tag: f[2] };
+    }
+  }
+  return null;
+}
+
+// Something small to do when nobody has talked to Punte for a while.
+// r1 and r2 are random numbers from 0 to 1. near = someone was seen a moment ago.
+const IDLE = [
+  { cmds: ['x:4'], tag: 'sleepy' },
+  { cmds: ['x:5', 'c:2'], tag: 'surprised' },
+  { cmds: ['x:1', 'h:12'], tag: 'happy' },
+  { cmds: ['x:7', 'p:-30'], tag: 'think' },
+  { cmds: ['x:6'], tag: 'love' }
+];
+const IDLE_LINES = ["Psst, I'm still here.", 'Remember to drink some water.', 'You are doing great today.', 'Want to hear a song? Just ask.'];
+export function idleAction(r1, r2, near) {
+  const a = IDLE[Math.min(IDLE.length - 1, Math.floor(r1 * IDLE.length))];
+  const line = near ? IDLE_LINES[Math.min(IDLE_LINES.length - 1, Math.floor(r2 * IDLE_LINES.length))] : '';
+  return { cmds: a.cmds, tag: a.tag, line };
+}

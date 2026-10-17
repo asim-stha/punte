@@ -82,6 +82,14 @@ export default function Settings({ b, S, set, onLogout, hidden }) {
           <div>Greet people I know<small>Say hello when a known face appears</small></div>
           <Toggle on={S.greet} onChange={v => set({ greet: v })} label="Greet people" />
         </div>
+        <div className="line">
+          <div>Say goodbye<small>When a known person leaves</small></div>
+          <Toggle on={S.bye} onChange={v => set({ bye: v })} label="Say goodbye" />
+        </div>
+        <div className="line">
+          <div>Play when quiet<small>Small fun moves if nobody talks for a while</small></div>
+          <Toggle on={S.idle} onChange={v => set({ idle: v })} label="Play when quiet" />
+        </div>
         <label htmlFor="away">Greet the same person again after (minutes away)</label>
         <input type="text" id="away" inputMode="numeric" value={S.away} onChange={e => set({ away: e.target.value.replace(/\D/g, '').slice(0, 3) })} />
       </div>
