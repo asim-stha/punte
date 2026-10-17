@@ -37,6 +37,14 @@ docker compose logs --tail 50 backend
 - The voice sounds choppy: the robot's WiFi is weak. Move it closer to the router or hotspot.
 - The voice is too quiet or too loud: use the volume knob on the robot.
 
+## Robot microphone
+
+- In Settings, "Listen with" must be "The robot's microphone", and the robot must be online. Press the microphone button on the Home page. The chat log shows `Ignored: ...` for sentences without the wake name, so you can see it hears you.
+- Nothing is heard: `docker compose logs stt` should show "model ready", and `docker compose ps` should show `stt` healthy. The first build downloads the model (about 150 MB).
+- It hears you badly: speak within 1 to 2 meters of the robot. Raise `MIC_GAIN` in `desktop_body.ino` (for example 12) and upload again.
+- It answers itself: the robot mic hears its own speaker. The server and the robot both mute the mic while it talks. Turn the volume knob down a little if it still happens.
+- It is slow: the first sentence after a quiet time takes longer. Put `STT_MODEL=tiny.en` in `docker/.env` and run `bash infra/deploy.sh` again for a faster, less accurate model.
+
 ## Camera
 
 - The Camera page says offline: check `CAM_TOKEN` in `docker/.env` is set (16+ characters) and the same as in the camera `secrets.h`. `docker compose logs backend` shows "Camera connected" when it works.

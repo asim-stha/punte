@@ -1,5 +1,5 @@
 # ci: runs on every push and pull request
-# 1. backend tests (with a real postgres)  2. frontend tests  3. voice container tests  4. build and start the whole stack
+# 1. backend tests (with a real postgres)  2. frontend tests  3. voice and listening container tests  4. build and start the whole stack
 name: ci
 
 on:
@@ -69,9 +69,21 @@ jobs:
       - run: python -m unittest -v test_server
         working-directory: tts
 
+  stt:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+        working-directory: stt
+      - run: python -m unittest -v test_server
+        working-directory: stt
+
   stack:
-    # builds the images and starts all five containers, then asks the proxy for /healthz
-    needs: [backend, frontend, tts]
+    # builds the images and starts all six containers, then asks the proxy for /healthz
+    needs: [backend, frontend, tts, stt]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

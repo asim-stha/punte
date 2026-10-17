@@ -57,7 +57,7 @@ The `uptime` workflow in GitHub also checks the live site every 30 minutes.
 ## 5. Check that everything works
 
 - `https://<address>/healthz` shows `"status":"ok"` and `"storage":"postgres"`.
-- On the VM, `docker compose ps` (inside `punte/docker`) shows five containers, four of them healthy.
+- On the VM, `docker compose ps` (inside `punte/docker`) shows six containers, five of them healthy.
 - Save a face on the website, run `docker compose restart backend`, and check the face is still there.
 
 ## Update the VM later

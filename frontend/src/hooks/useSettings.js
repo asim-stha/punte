@@ -18,6 +18,7 @@ export const DEFAULTS = {
   aiMode: 'auto',     // 'auto' = cloud first with the local model as backup, 'cloud' = cloud only, 'local' = local only
   cloudModel: 'gemma4:31b-cloud',
   localModel: 'llama3.1:8b',
+  listenSource: 'laptop', // 'laptop' = the microphone of this computer, 'robot' = the robot's microphone
   mode: 'wake',       // 'wake' | 'push' | 'always'
   wake: 'punte, buddy',
   away: 2             // minutes away before the same person is greeted again

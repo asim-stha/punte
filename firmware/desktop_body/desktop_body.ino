@@ -33,7 +33,8 @@ const int IN[4] = {14, 27, 26, 25};          // ULN2003 IN1..IN4
 
 // ---------- options ----------
 #define USE_SERVO 1        // 1 = head tilt on a servo, 0 = tilt with the stepper
-#define STREAM_AUDIO 0     // 1 = send mic audio to the cloud while someone speaks
+#define STREAM_AUDIO 1     // 1 = send mic audio to the cloud while someone speaks (only when the website asks for it)
+#define MIC_GAIN 8         // 4 = plain 16-bit value, 8 = twice as loud. Raise it if the server hears you too quietly
 #define DEBUG_AUDIO 0      // 1 = print mic level on Serial
 #define DEBUG_SENSORS 1    // 1 = print the sensor values every 2 seconds
 #define LOCAL_TEST 0       // 1 = connect to a test program on your own computer instead of Azure
@@ -59,6 +60,7 @@ DHT dht(DHT_PIN, DHT11);
 // ---------- state ----------
 volatile int expr = 0;      // 0 neutral 1 happy 2 sad 3 angry 4 sleepy 5 surprised 6 love 7 think 8 music
 volatile bool talking = false;
+volatile bool streamOn = false;    // the server says "a:1" when someone listens through the robot mic
 volatile int look = 0;
 char ipText[20] = "";
 unsigned long ipUntil = 0;
@@ -239,10 +241,10 @@ void audioTask(void*) {
         }
         slow += (level - slow) * 0.05f;
 #if STREAM_AUDIO
-        if (voiceOn) {
+        if (voiceOn && streamOn && !talking && song < 0) {      // not while the robot talks or plays a song, it would hear itself
           static int16_t pcm[FRAMES];
           for (int i = 0; i < frames; i++) {
-            int32_t v = (micRaw[2 * i] >> 14) - (int32_t)dc;
+            int32_t v = (((micRaw[2 * i] >> 14) - (int32_t)dc) * MIC_GAIN) / 4;
             pcm[i] = (int16_t)constrain(v, -32768, 32767);
           }
           xStreamBufferSend(micOut, pcm, frames * 2, 0);
@@ -579,12 +581,13 @@ void sensorsRun() {
 
 // ---------- commands: "x:1" expr | "t:1" talk | "n:5" nudge deg | "r:45" rotate deg
 // ---------- "p:90" absolute deg | "m:0" song (-1 stop) | "l:3" eye look
-// ---------- "h:10" head tilt deg (+ up) | "u:5" tilt nudge | "c:2" chirp
+// ---------- "h:10" head tilt deg (+ up) | "u:5" tilt nudge | "c:2" chirp | "a:1" send mic audio (0 = stop)
 void handle(String s) {
   if (s.length() < 3) return;
   char c = s[0]; String a = s.substring(2); float f = a.toFloat();
   if (c == 'x') { expr = constrain(a.toInt(), 0, 8); autoExpr = false; }
   else if (c == 't') talking = a.toInt();
+  else if (c == 'a') streamOn = a.toInt() != 0;
   else if (c == 'n' || c == 'r') target = pos + lround(f * SPD);
   else if (c == 'p') {
     long cur = ((pos % 4096) + 4096) % 4096;
@@ -619,7 +622,7 @@ void onWs(uint8_t n, WStype_t type, uint8_t* p, size_t len) {
 
 void onCloud(WStype_t type, uint8_t* p, size_t len) {
   if (type == WStype_CONNECTED) Serial.println("cloud: connected");
-  else if (type == WStype_DISCONNECTED) Serial.println("cloud: not connected, trying again");
+  else if (type == WStype_DISCONNECTED) { streamOn = false; Serial.println("cloud: not connected, trying again"); }
   else if (type == WStype_ERROR) Serial.println("cloud: error");
   if (type == WStype_TEXT) {
     String s; s.reserve(len);

@@ -2,7 +2,7 @@
 // Wake and always-listen modes: click to turn listening on or off.
 // Push-to-talk mode: hold it down while you speak.
 export default function MicButton({ b, S, className = 'btn pri', children }) {
-  const push = S.mode === 'push';
+  const push = S.mode === 'push' && S.listenSource !== 'robot';      // the robot's microphone is switched on and off, not held
   const live = push ? b.holding : b.listening;
   const handlers = push
     ? { onPointerDown: e => { e.preventDefault(); b.pttStart(); }, onPointerUp: b.pttStop, onPointerLeave: b.pttStop, onPointerCancel: b.pttStop }

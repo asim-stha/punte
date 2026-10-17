@@ -11,6 +11,10 @@ ESP32 code for the robot body, in `desktop_body/desktop_body.ino`.
 
 The server makes the voice with the `tts` container (Piper) and sends it to the robot as 16 kHz audio, a little at a time. The robot plays it on its speaker, so no change to the sketch is needed. Settings has "Where Punte talks": robot speaker, this computer, or both.
 
+### The robot's microphone
+
+With "Listen with: the robot's microphone" in Settings, the website tells the server, and the server tells the robot to send its microphone audio (`a:1`). The robot sends audio only while someone speaks, and not while it talks or plays a song. The server collects one sentence, the `stt` container turns it into text, and the website treats the text like anything you say. `MIC_GAIN` in the sketch sets how loud the microphone audio is. Upload the sketch again after changing it.
+
 ### Mood on the website
 
 The robot tells the server when its face or its awake, drowsy or asleep state changes (`mood:<face>:<state>`), and when something happens (`ev:touch`, `ev:near`, and so on). The website shows this on the Home page and in the chat log. In Settings, "Robot and website" chooses what is shared: both, website only, robot only, or neither. After changing `desktop_body.ino`, upload it again.

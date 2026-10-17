@@ -66,6 +66,14 @@ export default function Settings({ b, S, set, onLogout, hidden }) {
 
       <div className="card">
         <h2>Voice</h2>
+        <label htmlFor="ls">Listen with</label>
+        <select id="ls" value={S.listenSource} onChange={e => set({ listenSource: e.target.value })}>
+          <option value="laptop">The microphone of this computer</option>
+          <option value="robot">The robot's microphone</option>
+        </select>
+        {S.listenSource === 'robot' && <p className="mu" style={{ fontSize: 13 }}>
+          {b.info.ears ? 'Stay within 1 to 2 meters of the robot. Press the microphone button to start. Push-to-talk works like the wake name here.' : 'The listening engine is off on the server.'}
+        </p>}
         <label htmlFor="mode">Voice mode</label>
         <select id="mode" value={S.mode} onChange={e => set({ mode: e.target.value })}>
           <option value="wake">Wake name (say the name first)</option>

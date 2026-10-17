@@ -1,7 +1,8 @@
-# punte: 5 containers
+# punte: 6 containers
 #   proxy -> frontend (the website)
 #   proxy -> backend -> database (private network, no public port)
 #   backend -> tts (private network, makes the robot's voice)
+#   backend -> stt (private network, listens through the robot's microphone)
 # start: docker compose up -d --build   (run it inside this folder)
 name: punte
 
@@ -44,6 +45,7 @@ services:
       AUTH: ${AUTH:-password}
       AI_PROVIDER: ${AI_PROVIDER:-ollama}
       TTS_URL: http://tts:5000
+      STT_URL: http://stt:5001
       OLLAMA_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
     depends_on:
@@ -59,6 +61,18 @@ services:
     restart: unless-stopped
     networks: [private]
     mem_limit: 768m
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  # the robot's ears: audio in, text out, no internet needed when it runs
+  stt:
+    build:
+      context: ../stt
+      args:
+        MODEL: ${STT_MODEL:-base.en}
+    restart: unless-stopped
+    networks: [private]
+    mem_limit: 1g
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
 

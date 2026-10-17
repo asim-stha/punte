@@ -102,7 +102,7 @@ export function useBuddy({ S, onLoggedOut }) {
     if (x.ws) return;
     const w = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
     x.ws = w;
-    w.onopen = () => { x.watching = false; sendView(); sendSync(); };
+    w.onopen = () => { x.watching = false; sendView(); sendSync(); sendListen(); };
     w.onmessage = e => {
       if (typeof e.data !== 'string') return drawFrame(e.data);          // a picture from the robot camera
       try {
@@ -110,6 +110,7 @@ export function useBuddy({ S, onLoggedOut }) {
         if ('esp' in j) { setRobot(!!j.esp); if (!j.esp) setMood(null); }
         if ('cam' in j) setRobotCam(!!j.cam);
         if (j.mood) { setMood(j.mood); if (showsFace(live.current.S.sync)) setFace(j.mood.expr); }   // the face on the page copies the robot
+        if (j.heard && live.current.S.listenSource === 'robot') A.current.heard(j.heard);   // a sentence the robot's microphone heard
         if (j.ev && showsFace(live.current.S.sync) && eventText(j.ev)) log(eventText(j.ev));
       } catch (err) { /* ignore */ }
     };
@@ -131,6 +132,10 @@ export function useBuddy({ S, onLoggedOut }) {
       bmp.close(); x.frameAt = Date.now();
     } catch (e) { /* broken picture, skip it */ }
     x.decoding = false;
+  }
+  function sendListen() {                             // the server tells the robot to send audio only while someone listens through it
+    const w = x.ws;
+    if (w && w.readyState === 1) w.send(x.listening && live.current.S.listenSource === 'robot' ? 'listen:robot' : 'listen:off');
   }
   function sendSync() {
     const w = x.ws;
@@ -178,7 +183,7 @@ export function useBuddy({ S, onLoggedOut }) {
     setAi(p => ({ ...p, cloudOff: '' }));
   }, [S.aiSource, S.aiMode, S.cloudModel, S.ol]);
 
-  useEffect(() => { if (x.listening) stopListening(); }, [S.mode, S.mic]);   // changing the voice mode turns the microphone off
+  useEffect(() => { if (x.listening) stopListening(); }, [S.mode, S.mic, S.listenSource]);   // changing the voice mode turns the microphone off
   useEffect(() => { refreshBadge(); }, [listening, holding]);
   useEffect(() => {                                   // head follows the mouse
     if (S.lookAt !== 'mouse') return;
@@ -514,11 +519,19 @@ export function useBuddy({ S, onLoggedOut }) {
     try { r.start(); } catch (e) { log('Could not start the microphone: ' + e.message); }
   }
   function stopListening() {
-    const r = x.rec; x.rec = null; setListening(false);
+    const r = x.rec; x.rec = null; setListening(false); sendListen();
     if (r) { try { r.stop(); } catch (e) { /* ignore */ } }
   }
 
   function toggleListening() {                        // wake / always modes
+    if (live.current.S.listenSource === 'robot') {    // the robot's microphone: no browser microphone is needed
+      const { info: i, robot: r } = live.current;
+      if (!i.ears) return log('The listening engine is off on the server.');
+      if (!r) return log('The robot is offline, so its microphone cannot be used.');
+      if (x.listening) { stopListening(); return; }
+      setListening(true); sendListen();
+      return log('Listening with the robot - say the wake name first' + (live.current.S.mode === 'always' ? '' : ' (' + live.current.S.wake + ')'));
+    }
     if (!SR) return alert('Use Chrome');
     if (live.current.S.mode === 'push') return log('Push-to-talk mode: hold the microphone button or the Space key.');
     if (x.listening) stopListening(); else { startListening(); log('Listening - mode: ' + live.current.S.mode); }
@@ -526,7 +539,7 @@ export function useBuddy({ S, onLoggedOut }) {
 
   function pttStart() {                               // push-to-talk: the microphone is on only while held
     const s = live.current.S;
-    if (s.mode !== 'push' || !s.mic || x.ptt) return;
+    if (s.mode !== 'push' || s.listenSource === 'robot' || !s.mic || x.ptt) return;
     if (!SR) return alert('Use Chrome');
     speechSynthesis.cancel();
     const r = makeRec(false, t => A.current.route(t));

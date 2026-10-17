@@ -12,7 +12,8 @@ const PORT = 3100 + Math.floor(Math.random() * 500);
 const BASE = 'http://127.0.0.1:' + PORT;
 const PASSWORD = 'test-password-123', TOKEN = 'test-token-1234567890', CAM = 'test-camera-token-123';
 const VOICE_BYTES = Buffer.alloc(6400, 7);         // what the fake voice engine answers: 0.2 seconds of audio
-let proc, cookie = '', voiceServer;
+let proc, cookie = '', voiceServer, earsServer;
+const heardByEars = [];
 
 const face = n => ({ n, d: Array(128).fill(0.2) });
 const call = (p, method = 'GET', body, headers = {}) => fetch(BASE + p, {
@@ -40,9 +41,14 @@ test.before(async () => {
     });
   });
   await new Promise(r => voiceServer.listen(0, '127.0.0.1', r));
+  earsServer = http.createServer((req, res) => {     // stands in for the stt container
+    const parts = []; req.on('data', d => parts.push(d));
+    req.on('end', () => { heardByEars.push(Buffer.concat(parts).length); res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ text: 'hello robot' })); });
+  });
+  await new Promise(r => earsServer.listen(0, '127.0.0.1', r));
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'punte-srv-'));
   proc = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
-    env: { ...process.env, PORT, APP_PASSWORD: PASSWORD, ESP_TOKEN: TOKEN, CAM_TOKEN: CAM, TTS_URL: 'http://127.0.0.1:' + voiceServer.address().port, STORAGE: 'file', DATA_DIR: dir, PUBLIC_DIR: dir },
+    env: { ...process.env, PORT, APP_PASSWORD: PASSWORD, ESP_TOKEN: TOKEN, CAM_TOKEN: CAM, TTS_URL: 'http://127.0.0.1:' + voiceServer.address().port, STT_URL: 'http://127.0.0.1:' + earsServer.address().port, STORAGE: 'file', DATA_DIR: dir, PUBLIC_DIR: dir },
     stdio: 'ignore'
   });
   for (let i = 0; i < 50; i++) {
@@ -51,7 +57,7 @@ test.before(async () => {
   }
   throw new Error('server did not start');
 });
-test.after(() => { if (proc) proc.kill(); if (voiceServer) voiceServer.close(); });
+test.after(() => { if (proc) proc.kill(); if (voiceServer) voiceServer.close(); if (earsServer) earsServer.close(); });
 
 test('healthz reports the storage', async () => {
   const r = await call('/healthz');
@@ -216,4 +222,39 @@ test('speak: needs a login, a text and an online robot', async () => {
   await new Promise(r => setTimeout(r, 100));
   assert.equal((await call('/api/speak', 'POST', { text: 'hi' }, authed())).status, 409);   // no robot connected
   assert.equal((await (await call('/api/status', 'GET', null, authed())).json()).voice, true);
+});
+
+const talkChunks = (esp, bytes) => { for (let i = 0; i < bytes; i += 640) esp.send(Buffer.alloc(Math.min(640, bytes - i), 3)); };
+
+test('robot mic: a sentence becomes text for the browser that listens with the robot', async () => {
+  const esp = await connect(`ws://127.0.0.1:${PORT}/esp?token=${TOKEN}`);
+  const browser = await connect(`ws://127.0.0.1:${PORT}/ws`, authed());
+  assert.ok(await until(() => esp.got.includes('a:0')));               // nobody listens yet, the robot is told to keep quiet
+  talkChunks(esp, 16000);
+  await new Promise(r => setTimeout(r, 1000));
+  assert.equal(heardByEars.length, 0);                                 // so the audio is thrown away
+  browser.send('listen:robot');
+  assert.ok(await until(() => esp.got.includes('a:1')));
+  talkChunks(esp, 16000);
+  assert.ok(await until(() => browser.got.includes(JSON.stringify({ heard: 'hello robot' })), 3000));
+  assert.deepEqual(heardByEars, [16000]);                              // the whole sentence went to the stt container at once
+  talkChunks(esp, 3200);                                               // a very short sound is only noise
+  await new Promise(r => setTimeout(r, 1200));
+  assert.deepEqual(heardByEars, [16000]);
+  browser.send('listen:off');
+  assert.ok(await until(() => esp.got.lastIndexOf('a:0') > esp.got.lastIndexOf('a:1')));
+  esp.close(); browser.close();
+});
+
+test('robot mic: the robot does not hear its own voice', async () => {
+  const esp = await connect(`ws://127.0.0.1:${PORT}/esp?token=${TOKEN}`);
+  const browser = await connect(`ws://127.0.0.1:${PORT}/ws`, authed());
+  browser.send('listen:robot');
+  assert.ok(await until(() => esp.got.includes('a:1')));
+  const before = heardByEars.length;
+  assert.equal((await call('/api/speak', 'POST', { text: 'talking now' }, authed())).status, 200);
+  talkChunks(esp, 16000);                                              // arrives while the speaker is playing
+  await new Promise(r => setTimeout(r, 1200));
+  assert.equal(heardByEars.length, before);
+  esp.close(); browser.close();
 });

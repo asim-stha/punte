@@ -6,6 +6,7 @@
 //  - relays commands from the website to the ESP32 (the robot connects to /esp)
 //  - relays the robot's events and mood to the website (touch, someone near, awake or asleep)
 //  - /api/speak: the voice container makes the audio, and we stream it to the robot's speaker
+//  - the robot's microphone: audio from the robot -> stt container -> text for the website
 //  - relays pictures from the ESP32-CAM to the website (the camera connects to /cam)
 // login, storage and ai are separate files in lib/ so each one is easy to swap
 const express = require('express');
@@ -20,9 +21,12 @@ const ESP_TOKEN = process.env.ESP_TOKEN || '';
 const CAM_TOKEN = process.env.CAM_TOKEN || '';          // empty = camera turned off
 const SYNC = new Set(['both', 'web', 'robot', 'none']);   // how the website and the robot work together
 const BYTES_PER_SECOND = 32000;                         // robot speaker: 16 kHz x 2 bytes
+const GAP_MS = 700;                                    // this much quiet from the robot mic ends a sentence
+const MIN_SENTENCE = 12800;                            // 0.4 seconds of audio, shorter is only noise
+const MAX_SENTENCE = 480000;                           // 15 seconds
 const MAX_FRAME = 100 * 1024;                           // biggest picture we accept (bytes)
 
-let auth, storage, ai, tts;
+let auth, storage, ai, tts, stt;
 try {
   if (ESP_TOKEN.length < 16) throw new Error('Set ESP_TOKEN (16+ characters) in .env');
   if (CAM_TOKEN && CAM_TOKEN.length < 16) throw new Error('CAM_TOKEN must be 16+ characters (or leave it empty to turn the camera off)');
@@ -30,6 +34,7 @@ try {
   storage = require('./lib/storage')(process.env);
   ai = require('./lib/ai')(process.env);
   tts = require('./lib/tts')(process.env);
+  stt = require('./lib/stt')(process.env);
 } catch (e) {
   console.error('Cannot start: ' + e.message);
   process.exit(1);
@@ -74,7 +79,7 @@ app.use('/api', wrap(async (req, res, next) => {
   next();
 }));
 
-app.get('/api/status', (req, res) => res.json({ esp: esps.size > 0, cam: cams.size > 0, model: ai.model, storage: storage.kind, voice: tts.enabled }));
+app.get('/api/status', (req, res) => res.json({ esp: esps.size > 0, cam: cams.size > 0, model: ai.model, storage: storage.kind, voice: tts.enabled, ears: stt.enabled }));
 
 // the robot speaks: text -> audio (voice container) -> robot, at the speed the speaker plays it
 app.post('/api/speak', wrap(async (req, res) => {
@@ -132,9 +137,10 @@ const esps = new Set(), cams = new Set(), browsers = new Set();
 const CMD = /^[xtnrpmlhuc]:-?\d{1,4}(\.\d{1,2})?$/;       // commands the esp32 understands
 
 // The robot has a small audio buffer, so the audio is sent at the speed it is played (a little ahead), not all at once.
-let playTimer = null;
+let playTimer = null, speakingUntil = 0;
 function playToRobots(pcm) {
   clearTimeout(playTimer);                             // a new sentence replaces the old one
+  speakingUntil = Date.now() + pcm.length / BYTES_PER_SECOND * 1000 + 800;   // the mic would hear the speaker, so it is ignored for now
   const start = Date.now();
   let sent = 0;
   const step = () => {
@@ -147,6 +153,32 @@ function playToRobots(pcm) {
     if (sent < pcm.length) playTimer = setTimeout(step, 20);
   };
   step();
+}
+
+// The robot's microphone: the robot sends audio while someone speaks. A pause ends the sentence, the stt container turns it into text,
+// and the text goes to the browsers that chose "listen with the robot".
+let heardChunks = [], heardBytes = 0, heardTimer = null, waiting = 0;
+const listeners = () => { let n = 0; for (const b of browsers) if (b.listening) n++; return n; };
+const tellEars = () => tell(esps, stt.enabled && listeners() > 0 ? 'a:1' : 'a:0');   // the robot streams only when someone listens
+function micChunk(buf) {
+  if (!stt.enabled || !listeners() || Date.now() < speakingUntil) return;
+  heardChunks.push(buf); heardBytes += buf.length;
+  clearTimeout(heardTimer);
+  if (heardBytes >= MAX_SENTENCE) return endSentence();
+  heardTimer = setTimeout(endSentence, GAP_MS);
+}
+async function endSentence() {
+  clearTimeout(heardTimer);
+  const pcm = Buffer.concat(heardChunks);
+  heardChunks = []; heardBytes = 0;
+  if (pcm.length < MIN_SENTENCE || waiting >= 2) return;
+  waiting++;
+  try {
+    const text = await stt.transcribe(pcm);
+    if (text) for (const b of browsers) if (b.listening && b.readyState === 1) b.send(JSON.stringify({ heard: text }));
+  } catch (e) {
+    console.error('listening failed:', e.message);
+  } finally { waiting--; }
 }
 
 const tell = (set, msg) => { for (const s of set) if (s.readyState === 1) s.send(msg); };
@@ -189,15 +221,15 @@ server.on('upgrade', async (req, socket, head) => {
       });
       ws.on('close', () => { cams.delete(ws); announce(); console.log('Camera disconnected'); });
     } else if (kind === 'esp') {
-      esps.add(ws); announce(); console.log('ESP32 connected');
+      esps.add(ws); announce(); tellEars(); console.log('ESP32 connected');
       ws.on('message', (data, isBinary) => {
-        if (isBinary) return;
+        if (isBinary) return micChunk(data);
         const j = fromRobot(data.toString());
         if (!j) return;                                // only known messages are passed on
         if (j.mood) lastMood = j;
         tell(browsers, JSON.stringify(j));
       });
-      ws.on('close', () => { esps.delete(ws); if (!esps.size) lastMood = null; announce(); console.log('ESP32 disconnected'); });
+      ws.on('close', () => { esps.delete(ws); if (!esps.size) { lastMood = null; heardChunks = []; heardBytes = 0; } announce(); console.log('ESP32 disconnected'); });
     } else {
       browsers.add(ws); ws.watching = false; ws.sync = 'both'; ws.send(status());
       if (lastMood) ws.send(JSON.stringify(lastMood));
@@ -205,9 +237,10 @@ server.on('upgrade', async (req, socket, head) => {
         const s = data.toString();
         if (CMD.test(s)) { if (ws.sync === 'both' || ws.sync === 'robot') tell(esps, s); }   // only known commands, and only when the website may control the robot
         else if (s.startsWith('sync:') && SYNC.has(s.slice(5))) ws.sync = s.slice(5);
+        else if (s === 'listen:robot' || s === 'listen:off') { ws.listening = s === 'listen:robot'; tellEars(); }
         else if (s === 'view:on' || s === 'view:off') { ws.watching = s === 'view:on'; tellCam(); }
       });
-      ws.on('close', () => { browsers.delete(ws); tellCam(); });
+      ws.on('close', () => { browsers.delete(ws); tellCam(); tellEars(); });
     }
     ws.on('error', () => {});
   });
