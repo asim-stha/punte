@@ -28,6 +28,7 @@ services:
     environment:
       APP_PASSWORD: ${APP_PASSWORD:?set APP_PASSWORD in .env}
       ESP_TOKEN: ${ESP_TOKEN:?set ESP_TOKEN in .env}
+      CAM_TOKEN: ${CAM_TOKEN:-}
       # database connection
       PGHOST: database
       PGUSER: punte

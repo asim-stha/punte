@@ -118,3 +118,4 @@ video{width:100%;border-radius:18px;border:3px solid var(--ink);background:#1F1B
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 @media(max-width:1000px){.hero{grid-template-columns:1fr}.g2,.g3{grid-template-columns:1fr}}
 @media(max-width:860px){.app{grid-template-columns:1fr}.side{position:sticky;top:0;height:auto;flex-direction:row;overflow-x:auto;padding:10px;z-index:4;border-right:0;border-bottom:3px solid var(--ink)}.sp,.side .sfoot{display:none}.side{flex-wrap:wrap;gap:4px 6px}.logo{flex:0 0 100%;padding:0 10px 6px;font-size:28px}.nv{flex:none}.top{position:static;padding:14px 18px}.view{padding:18px}.c4{grid-template-columns:repeat(2,1fr)}}
+.rcam{width:100%;border-radius:18px;border:3px solid var(--ink);background:#1F1B3A;aspect-ratio:4/3;object-fit:cover;display:block}

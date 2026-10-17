@@ -57,6 +57,8 @@ export function useBuddy({ S, onLoggedOut }) {
   const [who, setWho] = useState('-');
   const [cam, setCam] = useState({ on: false, note: 'Press Connect to start the camera' });
   const [started, setStarted] = useState(false);
+  const [robotCam, setRobotCam] = useState(false);       // is the ESP32-CAM connected to the server
+  const [viewing, setViewing] = useState(false);         // is the Camera page open
   const [mem, setMem] = useState({ facts: [], chat: [] });
   const [faces, setFaces] = useState([]);
   const [info, setInfo] = useState({ model: '', storage: '' });
@@ -74,10 +76,12 @@ export function useBuddy({ S, onLoggedOut }) {
     cur: undefined, speaking: false, thinking: false, sayId: 0, awakeUntil: 0,
     lastSeen: 0, greetOK: false, lastGreeted: undefined, lastRec: 0, lastSend: 0,
     rec: null, ptt: null, listening: false, mutedUntil: 0, waiting: false, lastSaid: '',
-    cloudDead: false, cloudPause: 0
+    cloudDead: false, cloudPause: 0,
+    rc: null, frameAt: 0, decoding: false, camOn: false, watching: false
   }).current;
   const A = useRef({});                                // latest copies of the functions below
   const videoRef = useRef(el => { x.video = el; }).current;   // created once, so React does not reset it
+  const robotCanvasRef = useRef(el => { x.rc = el; }).current; // the picture from the robot camera is drawn here
 
   const msg = (cls, text, url) => setMessages(m => [...m.slice(-150), { cls, text, url }]);
   const log = text => msg('sys', text);
@@ -96,12 +100,40 @@ export function useBuddy({ S, onLoggedOut }) {
     if (x.ws) return;
     const w = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
     x.ws = w;
-    w.onmessage = e => { try { const j = JSON.parse(e.data); if ('esp' in j) setRobot(!!j.esp); } catch (err) { /* ignore */ } };
+    w.onopen = () => { x.watching = false; sendView(); };
+    w.onmessage = e => {
+      if (typeof e.data !== 'string') return drawFrame(e.data);          // a picture from the robot camera
+      try { const j = JSON.parse(e.data); if ('esp' in j) setRobot(!!j.esp); if ('cam' in j) setRobotCam(!!j.cam); } catch (err) { /* ignore */ }
+    };
     w.onclose = () => {
-      x.ws = null; setRobot(null);
+      x.ws = null; x.watching = false; setRobot(null); setRobotCam(false);
       if (!x.closing) x.timer = setTimeout(openWs, 3000);
     };
   }
+
+  // Pictures from the ESP32-CAM: drawn on one canvas. The Camera page shows it and face recognition can read it.
+  async function drawFrame(blob) {
+    if (x.decoding || !x.rc) return;                   // still busy with the last picture: skip this one
+    x.decoding = true;
+    try {
+      const bmp = await createImageBitmap(blob);
+      const c = x.rc;
+      if (c.width !== bmp.width || c.height !== bmp.height) { c.width = bmp.width; c.height = bmp.height; }
+      c.getContext('2d').drawImage(bmp, 0, 0);
+      bmp.close(); x.frameAt = Date.now();
+    } catch (e) { /* broken picture, skip it */ }
+    x.decoding = false;
+  }
+  // tell the server whether we want pictures (the camera only sends while someone watches)
+  function sendView() {
+    const w = x.ws, s = live.current.S;
+    const want = viewing || (x.camOn && s.faceSource === 'robot');
+    if (!w || w.readyState !== 1 || want === x.watching) return;
+    x.watching = want; w.send(want ? 'view:on' : 'view:off');
+  }
+  // what face recognition looks at: this computer's camera or the robot's camera
+  const source = () => live.current.S.faceSource === 'robot' ? x.rc : x.video;
+  const sourceReady = () => live.current.S.faceSource === 'robot' ? Date.now() - x.frameAt < 3000 : !!x.video && x.video.readyState >= 2;
 
   // ---------- saving ----------
   const commitMem = next => {
@@ -136,6 +168,8 @@ export function useBuddy({ S, onLoggedOut }) {
 
   useEffect(() => { if (x.listening) stopListening(); }, [S.mode, S.mic]);   // changing the voice mode turns the microphone off
   useEffect(() => { refreshBadge(); }, [listening, holding]);
+  useEffect(() => { sendView(); }, [viewing, started, cam.on, S.faceSource]);
+  useEffect(() => { if (x.camOn) { stopCamera(); startCamera(); } }, [S.faceSource]);   // other camera chosen: restart
 
   // ---------- camera + faces ----------
   async function loadModels() {
@@ -152,17 +186,22 @@ export function useBuddy({ S, onLoggedOut }) {
     try {
       setCam({ on: false, note: 'Starting camera...' });
       await loadModels();
+      if (live.current.S.faceSource === 'robot') {
+        x.camOn = true; setCam({ on: true, note: '' });
+        runLoop();
+        return;
+      }
       const s = await navigator.mediaDevices.getUserMedia({ video: true });
-      x.stream = s;
+      x.stream = s; x.camOn = true;
       const V = x.video; V.srcObject = s; await V.play().catch(() => {});
       setCam({ on: true, note: '' });
       runLoop();
-    } catch (e) { setCam({ on: false, note: 'Camera unavailable' }); log('Camera unavailable: ' + e.message + ' (allow the camera, and use https)'); }
+    } catch (e) { x.camOn = false; setCam({ on: false, note: 'Camera unavailable' }); log('Camera unavailable: ' + e.message + ' (allow the camera, and use https)'); }
   }
   function stopCamera() {
     x.loop++;
     if (x.stream) x.stream.getTracks().forEach(t => t.stop());
-    x.stream = null; if (x.video) x.video.srcObject = null;
+    x.stream = null; x.camOn = false; if (x.video) x.video.srcObject = null;
     x.cur = undefined; setWho('-'); setCam({ on: false, note: 'Camera is off' });
   }
 
@@ -170,15 +209,15 @@ export function useBuddy({ S, onLoggedOut }) {
     const id = ++x.loop;
     const tick = async () => {
       if (id !== x.loop) return;
-      const V = x.video;
+      const V = source();
       try {
-        if (V && V.readyState >= 2) {
+        if (V && sourceReady()) {
           const d = await window.faceapi.detectSingleFace(V, OPT());
           const now = Date.now(), { S: s } = live.current;
           if (d) {
             if (now - x.lastSeen > (+s.away || 2) * 60000) x.greetOK = true;   // away long enough: greet again
             x.lastSeen = now;
-            const b = d.box, err = (b.x + b.width / 2) / V.videoWidth - 0.5;
+            const b = d.box, err = (b.x + b.width / 2) / (V.videoWidth || V.width) - 0.5;
             if (s.track && Math.abs(err) > 0.07 && now - x.lastSend > 300) { A.current.send('n:' + (err * GAIN * SIGN).toFixed(1)); x.lastSend = now; }
             if (now - x.lastRec > 3000) { x.lastRec = now; await A.current.recognize(); }
           } else if (x.cur !== undefined && now - x.lastRec > 8000) { x.cur = undefined; setWho('-'); }
@@ -190,7 +229,8 @@ export function useBuddy({ S, onLoggedOut }) {
   }
 
   async function recognize() {
-    const f = await window.faceapi.detectSingleFace(x.video, OPT()).withFaceLandmarks().withFaceDescriptor();
+    if (!sourceReady()) return;
+    const f = await window.faceapi.detectSingleFace(source(), OPT()).withFaceLandmarks().withFaceDescriptor();
     if (!f) return;
     let best = null, bd = 0.5;
     for (const p of live.current.faces) {
@@ -208,8 +248,9 @@ export function useBuddy({ S, onLoggedOut }) {
 
   // The ONLY place a face is saved: the person presses "Learn face".
   async function learnFace() {
-    if (!x.stream) return alert('Press Connect first so the camera is on.');
-    const f = await window.faceapi.detectSingleFace(x.video, OPT()).withFaceLandmarks().withFaceDescriptor();
+    if (!x.camOn) return alert('Press Connect first so the camera is on.');
+    if (!sourceReady()) return alert('No picture from the camera yet.');
+    const f = await window.faceapi.detectSingleFace(source(), OPT()).withFaceLandmarks().withFaceDescriptor();
     if (!f) return alert('No face visible. Look at the camera and try again.');
     const name = (prompt('Name for this face?') || '').trim().slice(0, 40);
     if (!name) return;
@@ -441,8 +482,8 @@ export function useBuddy({ S, onLoggedOut }) {
 
   return {
     // state
-    robot, face, badge, messages, who, cam, started, mem, faces, info, listening, holding, ai, models, modelNote,
-    videoRef,
+    robot, robotCam, face, badge, messages, who, cam, started, mem, faces, info, listening, holding, ai, models, modelNote,
+    videoRef, robotCanvasRef, setViewing,
     // actions
     send, say, route, connect, setCamera, learnFace, deletePerson,
     toggleListening, pttStart, pttStop, addFact, deleteFact, clearChat, clearAllMemory, retryCloud, refreshModels

@@ -25,6 +25,7 @@ Made by CyberSquadNp, Dongshin University (Cloud Computing project).
                           +-----------+
 
 ESP32 robot --wss--> proxy --> backend      (the robot connects OUT, so no router setup is needed)
+ESP32-CAM  --wss--> proxy --> backend      (pictures go to the website, only while someone watches)
 ```
 
 | Container | Image | What it does |
@@ -44,6 +45,7 @@ An optional fifth container, `ollama`, can run the AI on the server (`--profile 
 - `proxy/` Caddy settings
 - `docker/` `docker-compose.yml` and `.env.example`
 - `firmware/desktop_body/` ESP32 code (Arduino)
+- `firmware/esp32_cam/` ESP32-CAM code (Arduino)
 - `infra/` Azure setup, VM setup, deploy, backup and alert scripts
 - `docs/` deploy guide and troubleshooting
 - `.github/workflows/` automatic tests and the uptime check
@@ -68,6 +70,6 @@ Step by step in [docs/deploy.md](docs/deploy.md). If something is wrong, see [do
 
 ## Security notes
 
-- Real passwords live only in `docker/.env` and `firmware/desktop_body/secrets.h`. Both are in `.gitignore`.
+- Real passwords live only in `docker/.env` and `firmware/desktop_body/secrets.h`. The camera has its own `secrets.h` in `firmware/esp32_cam/`. All of them are in `.gitignore`.
 - Faces are stored as 128 numbers, never as photos.
 - The database has no public port. Only the proxy is open to the internet.

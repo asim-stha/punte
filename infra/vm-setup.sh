@@ -27,12 +27,14 @@ if [ ! -f "$ENV_FILE" ]; then
   DOMAIN=${DOMAIN:-$DEFAULT_DOMAIN}
   while :; do read -r -s -p "Website password (8+ characters): " APP_PASSWORD; echo; [ ${#APP_PASSWORD} -ge 8 ] && break; done
   while :; do read -r -s -p "ESP token, same as secrets.h (16+ characters): " ESP_TOKEN; echo; [ ${#ESP_TOKEN} -ge 16 ] && break; done
+  while :; do read -r -s -p "Camera token, same as the camera secrets.h (16+ characters, empty = no camera): " CAM_TOKEN; echo; [ -z "$CAM_TOKEN" ] || [ ${#CAM_TOKEN} -ge 16 ] && break; done
   POSTGRES_PASSWORD=$(openssl rand -hex 16)
   umask 077
   cat > "$ENV_FILE" <<ENV
 DOMAIN=$DOMAIN
 APP_PASSWORD=$APP_PASSWORD
 ESP_TOKEN=$ESP_TOKEN
+CAM_TOKEN=$CAM_TOKEN
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 ENV
 fi

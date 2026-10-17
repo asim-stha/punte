@@ -6,6 +6,7 @@ export const DEFAULTS = {
   remember: true,     // keep recent chats
   cam: true,          // camera on
   mic: true,          // microphone allowed
+  faceSource: 'laptop', // camera used for faces: 'laptop' = this computer, 'robot' = the ESP32-CAM
   track: false,       // head follows the face (only if the camera is on the robot's head)
   rate: 1, voice: '',
   aiSource: 'local',  // 'local' = this browser asks Ollama on this computer, 'server' = the server asks Ollama

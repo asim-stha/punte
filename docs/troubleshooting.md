@@ -29,6 +29,14 @@ docker compose logs --tail 50 backend
 - The ESP32 needs 2.4 GHz WiFi (not 5 GHz).
 - `docker compose logs backend` shows a line when the robot connects or is rejected.
 
+## Camera
+
+- The Camera page says offline: check `CAM_TOKEN` in `docker/.env` is set (16+ characters) and the same as in the camera `secrets.h`. `docker compose logs backend` shows "Camera connected" when it works.
+- The Serial Monitor shows "server no": the WiFi is 5 GHz, the cloud address is wrong, or the token is different.
+- The camera resets again and again, or shows "Brownout detector": the power is too weak. Use a better USB cable or a 5 V supply that gives 1 A or more.
+- "camera failed to start": push the camera ribbon cable in again (lift the black latch first) and check the power.
+- The picture is slow: the WiFi is weak. Move the router closer, or raise `FRAME_MS` in the sketch.
+
 ## Backups
 
 - `tail backups/backup.log` shows the last nightly runs.

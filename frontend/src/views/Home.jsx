@@ -29,8 +29,8 @@ export default function Home({ b, S, hidden }) {
       <div className="card">
         <h2>Camera</h2>
         <div className="vbox">
-          <video ref={b.videoRef} autoPlay muted playsInline />
-          <div className="vph" hidden={b.cam.on}>{b.cam.note}</div>
+          <video ref={b.videoRef} autoPlay muted playsInline hidden={S.faceSource === 'robot'} />
+          <div className="vph" hidden={b.cam.on && S.faceSource !== 'robot'}>{S.faceSource === 'robot' ? 'Faces are seen by the robot camera (see the Camera page)' : b.cam.note}</div>
         </div>
         <div className="row" style={{ marginTop: 12, justifyContent: 'space-between' }}><span className="mu">Seen</span><b>{b.who}</b></div>
       </div>
