@@ -139,3 +139,45 @@ test('status tells the browser when the camera is online', async () => {
   assert.deepEqual(seen[2], { esp: false, cam: false });
   browser.close();
 });
+
+// collects every message a socket gets, so none is missed
+const collect = ws => { const got = []; ws.on('message', d => got.push(d.toString())); return got; };
+const until = async (fn, ms = 1500) => { for (let t = 0; t < ms; t += 25) { if (fn()) return true; await new Promise(r => setTimeout(r, 25)); } return false; };
+const connect = (url, headers) => new Promise((resolve, reject) => {
+  const ws = new WebSocket(url, { headers }); ws.got = collect(ws);
+  ws.once('open', () => resolve(ws)); ws.once('error', reject);
+});
+
+test('robot events and mood reach the website, other messages do not', async () => {
+  const browser = await connect(`ws://127.0.0.1:${PORT}/ws`, authed());
+  const esp = await connect(`ws://127.0.0.1:${PORT}/esp?token=${TOKEN}`);
+  esp.send('ev:touch');
+  assert.ok(await until(() => browser.got.includes(JSON.stringify({ ev: 'touch' }))));
+  esp.send('mood:6:0');
+  assert.ok(await until(() => browser.got.includes(JSON.stringify({ mood: { expr: 6, state: 0 } }))));
+  const before = browser.got.length;
+  esp.send('hello there'); esp.send('mood:99:9'); esp.send('ev:<script>');
+  await new Promise(r => setTimeout(r, 200));
+  assert.equal(browser.got.length, before);
+  const late = await connect(`ws://127.0.0.1:${PORT}/ws`, authed());      // a browser that opens later still learns the mood
+  assert.ok(await until(() => late.got.includes(JSON.stringify({ mood: { expr: 6, state: 0 } }))));
+  esp.close(); browser.close(); late.close();
+});
+
+test('sync: website only and neither stop commands to the robot', async () => {
+  const esp = await connect(`ws://127.0.0.1:${PORT}/esp?token=${TOKEN}`);
+  const browser = await connect(`ws://127.0.0.1:${PORT}/ws`, authed());
+  browser.send('sync:web'); browser.send('h:18');
+  await new Promise(r => setTimeout(r, 200));
+  assert.ok(!esp.got.includes('h:18'));
+  browser.send('sync:none'); browser.send('h:18');
+  await new Promise(r => setTimeout(r, 200));
+  assert.ok(!esp.got.includes('h:18'));
+  browser.send('sync:robot'); browser.send('c:2');
+  assert.ok(await until(() => esp.got.includes('c:2')));
+  browser.send('sync:nonsense'); browser.send('c:1');              // a wrong value changes nothing
+  assert.ok(await until(() => esp.got.includes('c:1')));
+  browser.send('sync:both'); browser.send('c:3');
+  assert.ok(await until(() => esp.got.includes('c:3')));
+  esp.close(); browser.close();
+});

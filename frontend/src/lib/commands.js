@@ -189,3 +189,27 @@ export function idleAction(r1, r2, near) {
   const line = near ? IDLE_LINES[Math.min(IDLE_LINES.length - 1, Math.floor(r2 * IDLE_LINES.length))] : '';
   return { cmds: a.cmds, tag: a.tag, line };
 }
+
+
+// ---------- website and robot working together ----------
+// sync: 'both' | 'web' (website only) | 'robot' (robot only) | 'none'
+export const SYNC_OPTIONS = [
+  ['both', 'Both react together'],
+  ['web', 'Website only'],
+  ['robot', 'Robot only'],
+  ['none', 'Neither']
+];
+export const controlsRobot = sync => sync === 'both' || sync === 'robot';   // commands go to the real robot
+export const showsFace = sync => sync === 'both' || sync === 'web';          // the face on the page reacts
+
+export const ROBOT_STATES = ['Awake', 'Drowsy', 'Asleep'];
+const EVENT_TEXT = {
+  touch: 'Someone touched Punte',
+  near: 'Someone came close to Punte',
+  motion: 'Punte saw movement',
+  sound: 'Punte heard a loud sound',
+  voice: 'Punte heard a voice',
+  wake: 'Punte woke up'
+};
+// message from the robot (through the server) -> text for the chat log, or '' when it is not an event we know
+export const eventText = ev => EVENT_TEXT[ev] || '';

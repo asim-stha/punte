@@ -4,6 +4,7 @@
 //  - /healthz: says if the server and the database work
 //  - /vendor: serves the face-api library
 //  - relays commands from the website to the ESP32 (the robot connects to /esp)
+//  - relays the robot's events and mood to the website (touch, someone near, awake or asleep)
 //  - relays pictures from the ESP32-CAM to the website (the camera connects to /cam)
 // login, storage and ai are separate files in lib/ so each one is easy to swap
 const express = require('express');
@@ -16,6 +17,7 @@ const check = require('./lib/validate');
 const PORT = +process.env.PORT || 3000;
 const ESP_TOKEN = process.env.ESP_TOKEN || '';
 const CAM_TOKEN = process.env.CAM_TOKEN || '';          // empty = camera turned off
+const SYNC = new Set(['both', 'web', 'robot', 'none']);   // how the website and the robot work together
 const MAX_FRAME = 100 * 1024;                           // biggest picture we accept (bytes)
 
 let auth, storage, ai;
@@ -114,6 +116,15 @@ const CMD = /^[xtnrpmlhuc]:-?\d{1,4}(\.\d{1,2})?$/;       // commands the esp32 
 const tell = (set, msg) => { for (const s of set) if (s.readyState === 1) s.send(msg); };
 const status = () => JSON.stringify({ esp: esps.size > 0, cam: cams.size > 0 });
 const announce = () => tell(browsers, status());
+let lastMood = null;                                   // the robot's latest mood, shown to browsers that connect later
+// what the robot tells us: "ev:touch" (something happened) or "mood:1:0" (face number and awake/drowsy/asleep)
+function fromRobot(text) {
+  let m = /^ev:([a-z]{3,10})$/.exec(text);
+  if (m) return { ev: m[1] };
+  m = /^mood:(\d{1,2}):([0-2])$/.exec(text);
+  if (m) return { mood: { expr: +m[1], state: +m[2] } };
+  return null;
+}
 const isJpeg = b => b.length > 4 && b[0] === 0xff && b[1] === 0xd8;
 // the camera only sends pictures while at least one browser is watching
 const watchers = () => { let n = 0; for (const b of browsers) if (b.watching) n++; return n; };
@@ -143,12 +154,21 @@ server.on('upgrade', async (req, socket, head) => {
       ws.on('close', () => { cams.delete(ws); announce(); console.log('Camera disconnected'); });
     } else if (kind === 'esp') {
       esps.add(ws); announce(); console.log('ESP32 connected');
-      ws.on('close', () => { esps.delete(ws); announce(); console.log('ESP32 disconnected'); });
+      ws.on('message', (data, isBinary) => {
+        if (isBinary) return;
+        const j = fromRobot(data.toString());
+        if (!j) return;                                // only known messages are passed on
+        if (j.mood) lastMood = j;
+        tell(browsers, JSON.stringify(j));
+      });
+      ws.on('close', () => { esps.delete(ws); if (!esps.size) lastMood = null; announce(); console.log('ESP32 disconnected'); });
     } else {
-      browsers.add(ws); ws.watching = false; ws.send(status());
+      browsers.add(ws); ws.watching = false; ws.sync = 'both'; ws.send(status());
+      if (lastMood) ws.send(JSON.stringify(lastMood));
       ws.on('message', data => {
         const s = data.toString();
-        if (CMD.test(s)) tell(esps, s);                // only pass on known commands
+        if (CMD.test(s)) { if (ws.sync === 'both' || ws.sync === 'robot') tell(esps, s); }   // only known commands, and only when the website may control the robot
+        else if (s.startsWith('sync:') && SYNC.has(s.slice(5))) ws.sync = s.slice(5);
         else if (s === 'view:on' || s === 'view:off') { ws.watching = s === 'view:on'; tellCam(); }
       });
       ws.on('close', () => { browsers.delete(ws); tellCam(); });

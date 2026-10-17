@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { robotCommand, openCommand, wakeNames, wakeSplit, parseReply, systemPrompt, people, greeting, farewell, smallTalk, idleAction } from '../src/lib/commands.js';
+import { robotCommand, openCommand, wakeNames, wakeSplit, parseReply, systemPrompt, people, greeting, farewell, smallTalk, idleAction, controlsRobot, showsFace, eventText, SYNC_OPTIONS } from '../src/lib/commands.js';
 
 test('robot commands', () => {
   assert.deepEqual(robotCommand('please turn left'), { cmd: 'r:-45' });
@@ -99,4 +99,12 @@ test('idle actions use only commands the server accepts', () => {
     assert.equal(!!a.line, i % 2 === 0);             // a line is spoken only when someone is near
   }
   assert.ok(idleAction(0.999, 0.999, true).line);    // top of the range does not run off the list
+});
+
+test('sync choices', () => {
+  assert.deepEqual(SYNC_OPTIONS.map(o => o[0]), ['both', 'web', 'robot', 'none']);
+  assert.deepEqual(['both', 'web', 'robot', 'none'].map(controlsRobot), [true, false, true, false]);
+  assert.deepEqual(['both', 'web', 'robot', 'none'].map(showsFace), [true, true, false, false]);
+  assert.equal(eventText('touch'), 'Someone touched Punte');
+  assert.equal(eventText('something-else'), '');
 });

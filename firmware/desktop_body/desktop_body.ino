@@ -601,6 +601,18 @@ void handle(String s) {
   else if (c == 'c') chirpReq = a.toInt();
 }
 
+// tells the website how the robot feels (face number and awake/drowsy/asleep), only when it changes
+void reportMood() {
+  static int lastE = -1, lastS = -1;
+  static unsigned long lastAt = 0;
+  if (!netStarted || !cloud.isConnected()) { lastE = -1; return; }       // after a reconnect the mood is sent again
+  if ((expr == lastE && (int)state == lastS) || millis() - lastAt < 400) return;
+  lastE = expr; lastS = (int)state; lastAt = millis();
+  char m[16];
+  snprintf(m, sizeof m, "mood:%d:%d", (int)expr, (int)state);
+  cloud.sendTXT(m);
+}
+
 void onWs(uint8_t n, WStype_t type, uint8_t* p, size_t len) {
   if (type == WStype_TEXT) { interact(); handle(String((char*)p)); }
 }
@@ -730,6 +742,7 @@ void loop() {
   tiltRun();
   sensorsRun();
   mind();
+  reportMood();
 #if STREAM_AUDIO
   static uint8_t chunk[512];
   if (netStarted && cloud.isConnected() && xStreamBufferBytesAvailable(micOut) >= 512) {

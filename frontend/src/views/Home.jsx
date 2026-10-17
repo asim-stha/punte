@@ -1,6 +1,7 @@
 // home page: camera, who punte sees and the status of robot, ai and storage
 import Face from '../components/Face';
 import MicButton from '../components/MicButton';
+import { NAMES, ROBOT_STATES } from '../lib/commands';
 
 const modelText = (S, b) => {
   if (S.aiSource !== 'local') return b.info.model;
@@ -43,6 +44,7 @@ export default function Home({ b, S, hidden }) {
           <div className="st"><b>{b.mem.chat.length}</b><span>Recent messages</span></div>
         </div>
         <div className="line"><span className="mu">Robot</span><b>{b.robot === null ? '-' : b.robot ? 'Online' : 'Offline'}</b></div>
+        <div className="line"><span className="mu">Robot mood</span><b>{b.mood ? NAMES[b.mood.expr] + ', ' + ROBOT_STATES[b.mood.state] : '-'}</b></div>
         <div className="line"><span className="mu">AI</span><b>{S.aiSource === 'local' ? 'This computer' : 'Server'}</b></div>
         <div className="line"><span className="mu">AI model</span><b>{modelText(S, b)}</b></div>
       </div>

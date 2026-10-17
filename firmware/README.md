@@ -7,6 +7,10 @@ ESP32 code for the robot body, in `desktop_body/desktop_body.ino`.
 3. Libraries: WebSockets (Markus Sattler), Adafruit SSD1306, Adafruit GFX, DHT sensor library (Adafruit).
 4. Upload the sketch.
 
+### Mood on the website
+
+The robot tells the server when its face or its awake, drowsy or asleep state changes (`mood:<face>:<state>`), and when something happens (`ev:touch`, `ev:near`, and so on). The website shows this on the Home page and in the chat log. In Settings, "Robot and website" chooses what is shared: both, website only, robot only, or neither. After changing `desktop_body.ino`, upload it again.
+
 ## Camera (ESP32-CAM)
 
 Code is in `esp32_cam/esp32_cam.ino`. It is for the AI-Thinker ESP32-CAM sitting on the ESP32-CAM-MB base board.

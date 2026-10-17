@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import Toggle from '../components/Toggle';
 import ModePicker from '../components/ModePicker';
+import { SYNC_OPTIONS } from '../lib/commands';
 
 function useVoices() {
   const [voices, setVoices] = useState([]);
@@ -40,6 +41,11 @@ export default function Settings({ b, S, set, onLogout, hidden }) {
         <h2>Connection</h2>
         <div className="line"><span className="mu">Server</span><b>{location.host}</b></div>
         <div className="line"><span className="mu">Robot</span><b>{b.robot === null ? 'Checking...' : b.robot ? 'Online' : 'Offline'}</b></div>
+        <label htmlFor="sync">Robot and website</label>
+        <select id="sync" value={S.sync} onChange={e => set({ sync: e.target.value })}>
+          {SYNC_OPTIONS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+        </select>
+        <p className="mu" style={{ fontSize: 13 }}>Both: commands go to the robot and the face on this page copies the robot. Website only: the page reacts but the robot gets no commands. Robot only: the robot gets commands and the page stays still. Neither: nothing is sent or shown.</p>
         <label htmlFor="ai">Who answers questions</label>
         <select id="ai" value={S.aiSource} onChange={e => set({ aiSource: e.target.value })}>
           <option value="server">The server (Ollama on the server)</option>

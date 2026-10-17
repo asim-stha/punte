@@ -7,6 +7,7 @@ export const DEFAULTS = {
   cam: true,          // camera on
   mic: true,          // microphone allowed
   faceSource: 'laptop', // camera used for faces: 'laptop' = this computer, 'robot' = the ESP32-CAM
+  sync: 'both',       // website and robot: 'both' | 'web' | 'robot' | 'none'
   lookAt: 'face',     // where the head looks: 'face' = follows your face, 'mouse' = follows the mouse, 'off'
   bye: true,          // say goodbye when a known person leaves
   idle: true,         // do small fun things when it is quiet

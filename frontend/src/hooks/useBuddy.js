@@ -2,7 +2,7 @@
 // The views only show what this hook returns.
 import { useEffect, useRef, useState } from 'react';
 import { api, AuthError } from '../api';
-import { EX, robotCommand, openCommand, smallTalk, greeting, farewell, idleAction, wakeNames, wakeSplit, systemPrompt, parseReply, keepFacts } from '../lib/commands';
+import { EX, robotCommand, openCommand, smallTalk, greeting, farewell, idleAction, controlsRobot, showsFace, eventText, wakeNames, wakeSplit, systemPrompt, parseReply, keepFacts } from '../lib/commands';
 
 const MODELS = '/vendor/face-api/model/';
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -57,6 +57,7 @@ export function useBuddy({ S, onLoggedOut }) {
   const [who, setWho] = useState('-');
   const [cam, setCam] = useState({ on: false, note: 'Press Connect to start the camera' });
   const [started, setStarted] = useState(false);
+  const [mood, setMood] = useState(null);               // the real robot's mood: { expr, state }
   const [robotCam, setRobotCam] = useState(false);       // is the ESP32-CAM connected to the server
   const [viewing, setViewing] = useState(false);         // is the Camera page open
   const [mem, setMem] = useState({ facts: [], chat: [] });
@@ -92,19 +93,25 @@ export function useBuddy({ S, onLoggedOut }) {
 
   // ---------- robot link (through our server) ----------
   const send = s => {
-    const w = x.ws;
-    if (w && w.readyState === 1) w.send(s);
-    if (s.startsWith('x:')) setFace(+s.slice(2));
+    const w = x.ws, sync = live.current.S.sync;
+    if (w && w.readyState === 1 && controlsRobot(sync)) w.send(s);     // the server also checks this
+    if (s.startsWith('x:') && showsFace(sync)) setFace(+s.slice(2));
   };
 
   function openWs() {
     if (x.ws) return;
     const w = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
     x.ws = w;
-    w.onopen = () => { x.watching = false; sendView(); };
+    w.onopen = () => { x.watching = false; sendView(); sendSync(); };
     w.onmessage = e => {
       if (typeof e.data !== 'string') return drawFrame(e.data);          // a picture from the robot camera
-      try { const j = JSON.parse(e.data); if ('esp' in j) setRobot(!!j.esp); if ('cam' in j) setRobotCam(!!j.cam); } catch (err) { /* ignore */ }
+      try {
+        const j = JSON.parse(e.data);
+        if ('esp' in j) { setRobot(!!j.esp); if (!j.esp) setMood(null); }
+        if ('cam' in j) setRobotCam(!!j.cam);
+        if (j.mood) { setMood(j.mood); if (showsFace(live.current.S.sync)) setFace(j.mood.expr); }   // the face on the page copies the robot
+        if (j.ev && showsFace(live.current.S.sync) && eventText(j.ev)) log(eventText(j.ev));
+      } catch (err) { /* ignore */ }
     };
     w.onclose = () => {
       x.ws = null; x.watching = false; setRobot(null); setRobotCam(false);
@@ -124,6 +131,10 @@ export function useBuddy({ S, onLoggedOut }) {
       bmp.close(); x.frameAt = Date.now();
     } catch (e) { /* broken picture, skip it */ }
     x.decoding = false;
+  }
+  function sendSync() {
+    const w = x.ws;
+    if (w && w.readyState === 1) w.send('sync:' + (live.current.S.sync || 'both'));
   }
   // tell the server whether we want pictures (the camera only sends while someone watches)
   function sendView() {
@@ -187,6 +198,10 @@ export function useBuddy({ S, onLoggedOut }) {
     }, 15000);
     return () => clearInterval(t);
   }, []);
+  useEffect(() => {                                   // the choice is also told to the server, which holds back the commands
+    sendSync();
+    if (!showsFace(S.sync)) setFace(0);
+  }, [S.sync]);
   useEffect(() => { sendView(); }, [viewing, started, cam.on, S.faceSource]);
   useEffect(() => { if (x.camOn) { stopCamera(); startCamera(); } }, [S.faceSource]);   // other camera chosen: restart
 
@@ -518,7 +533,7 @@ export function useBuddy({ S, onLoggedOut }) {
 
   return {
     // state
-    robot, robotCam, face, badge, messages, who, cam, started, mem, faces, info, listening, holding, ai, models, modelNote,
+    robot, robotCam, mood, face, badge, messages, who, cam, started, mem, faces, info, listening, holding, ai, models, modelNote,
     videoRef, robotCanvasRef, setViewing,
     // actions
     send, say, route, connect, setCamera, learnFace, deletePerson,
