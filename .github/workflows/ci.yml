@@ -1,5 +1,5 @@
 # ci: runs on every push and pull request
-# 1. backend tests (with a real postgres)  2. frontend tests  3. build and start the whole stack
+# 1. backend tests (with a real postgres)  2. frontend tests  3. voice container tests  4. build and start the whole stack
 name: ci
 
 on:
@@ -57,9 +57,21 @@ jobs:
       - run: npm run build
         working-directory: frontend
 
+  tts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+        working-directory: tts
+      - run: python -m unittest -v test_server
+        working-directory: tts
+
   stack:
-    # builds the images and starts all four containers, then asks the proxy for /healthz
-    needs: [backend, frontend]
+    # builds the images and starts all five containers, then asks the proxy for /healthz
+    needs: [backend, frontend, tts]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -74,7 +86,7 @@ jobs:
           ENV
       - name: Build and start
         working-directory: docker
-        run: docker compose up -d --build --wait --wait-timeout 180
+        run: docker compose up -d --build --wait --wait-timeout 300
       - name: Check the whole chain (proxy -> backend -> database)
         run: curl -fsSk --retry 10 --retry-delay 3 --retry-all-errors https://localhost/healthz
       - name: Show logs if something failed

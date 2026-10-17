@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# vm-setup: first-time setup on the vm (installs docker, gets the code, asks for the passwords, starts the 4 containers)
+# vm-setup: first-time setup on the vm (installs docker, gets the code, asks for the passwords, starts the 5 containers)
 # run it on the vm: bash vm-setup.sh
 set -euo pipefail
 

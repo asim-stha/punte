@@ -29,6 +29,14 @@ docker compose logs --tail 50 backend
 - The ESP32 needs 2.4 GHz WiFi (not 5 GHz).
 - `docker compose logs backend` shows a line when the robot connects or is rejected.
 
+## Robot voice
+
+- The robot stays silent: in Settings, "Where Punte talks" must be "Robot speaker" or "Robot speaker and this computer", and the robot must be online. The chat log shows "Robot voice did not work" with the reason.
+- "voice engine is off": the `tts` container is not running. `docker compose ps` should show it healthy, and `docker compose logs tts` shows "voice ready".
+- The first build of `tts` downloads the voice (about 60 MB), so it takes a few minutes.
+- The voice sounds choppy: the robot's WiFi is weak. Move it closer to the router or hotspot.
+- The voice is too quiet or too loud: use the volume knob on the robot.
+
 ## Camera
 
 - The Camera page says offline: check `CAM_TOKEN` in `docker/.env` is set (16+ characters) and the same as in the camera `secrets.h`. `docker compose logs backend` shows "Camera connected" when it works.

@@ -76,7 +76,14 @@ export default function Settings({ b, S, set, onLogout, hidden }) {
           <label htmlFor="wake">Wake name (separate several with commas)</label>
           <input type="text" id="wake" value={S.wake} onChange={e => set({ wake: e.target.value })} />
         </>}
-        <label htmlFor="vc">Voice</label>
+        <label htmlFor="vp">Where Punte talks</label>
+        <select id="vp" value={S.voicePlace} onChange={e => set({ voicePlace: e.target.value })}>
+          <option value="both">Robot speaker and this computer</option>
+          <option value="robot">Robot speaker only</option>
+          <option value="laptop">This computer only</option>
+        </select>
+        {S.voicePlace !== 'laptop' && !b.info.voice && <p className="mu" style={{ fontSize: 13 }}>The voice engine is off on the server, so this computer talks.</p>}
+        <label htmlFor="vc">Voice of this computer</label>
         <select id="vc" value={S.voice} onChange={e => set({ voice: e.target.value })}>
           <option value="">Default</option>
           {voices.map(v => <option key={v.name}>{v.name}</option>)}

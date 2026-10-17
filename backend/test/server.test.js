@@ -6,11 +6,13 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const WebSocket = require('ws');
+const http = require('http');
 
 const PORT = 3100 + Math.floor(Math.random() * 500);
 const BASE = 'http://127.0.0.1:' + PORT;
 const PASSWORD = 'test-password-123', TOKEN = 'test-token-1234567890', CAM = 'test-camera-token-123';
-let proc, cookie = '';
+const VOICE_BYTES = Buffer.alloc(6400, 7);         // what the fake voice engine answers: 0.2 seconds of audio
+let proc, cookie = '', voiceServer;
 
 const face = n => ({ n, d: Array(128).fill(0.2) });
 const call = (p, method = 'GET', body, headers = {}) => fetch(BASE + p, {
@@ -30,9 +32,17 @@ const nextMessage = (ws, ms = 1000) => new Promise(resolve => {
 });
 
 test.before(async () => {
+  voiceServer = http.createServer((req, res) => {   // stands in for the tts container
+    let body = ''; req.on('data', d => body += d);
+    req.on('end', () => {
+      if (JSON.parse(body).text.includes('fail')) { res.statusCode = 500; return res.end('no'); }
+      res.end(VOICE_BYTES);
+    });
+  });
+  await new Promise(r => voiceServer.listen(0, '127.0.0.1', r));
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'punte-srv-'));
   proc = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
-    env: { ...process.env, PORT, APP_PASSWORD: PASSWORD, ESP_TOKEN: TOKEN, CAM_TOKEN: CAM, STORAGE: 'file', DATA_DIR: dir, PUBLIC_DIR: dir },
+    env: { ...process.env, PORT, APP_PASSWORD: PASSWORD, ESP_TOKEN: TOKEN, CAM_TOKEN: CAM, TTS_URL: 'http://127.0.0.1:' + voiceServer.address().port, STORAGE: 'file', DATA_DIR: dir, PUBLIC_DIR: dir },
     stdio: 'ignore'
   });
   for (let i = 0; i < 50; i++) {
@@ -41,7 +51,7 @@ test.before(async () => {
   }
   throw new Error('server did not start');
 });
-test.after(() => proc && proc.kill());
+test.after(() => { if (proc) proc.kill(); if (voiceServer) voiceServer.close(); });
 
 test('healthz reports the storage', async () => {
   const r = await call('/healthz');
@@ -180,4 +190,30 @@ test('sync: website only and neither stop commands to the robot', async () => {
   browser.send('sync:both'); browser.send('c:3');
   assert.ok(await until(() => esp.got.includes('c:3')));
   esp.close(); browser.close();
+});
+
+test('speak: the voice audio is streamed to the robot speaker', async () => {
+  const esp = new WebSocket(`ws://127.0.0.1:${PORT}/esp?token=${TOKEN}`);
+  const audio = [];
+  esp.on('message', (d, isBinary) => { if (isBinary) audio.push(d); });
+  await new Promise(r => esp.once('open', r));
+  const r = await call('/api/speak', 'POST', { text: 'Hello there' }, authed());
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { ms: 200 });
+  assert.ok(await until(() => audio.reduce((n, b) => n + b.length, 0) >= VOICE_BYTES.length));
+  const all = Buffer.concat(audio);
+  assert.equal(all.length, VOICE_BYTES.length);
+  assert.ok(all.equals(VOICE_BYTES));
+  assert.ok(audio.every(b => b.length <= 640));                  // small pieces, the robot has a small buffer
+  assert.equal((await call('/api/speak', 'POST', { text: 'please fail' }, authed())).status, 502);
+  esp.close();
+});
+
+test('speak: needs a login, a text and an online robot', async () => {
+  assert.equal((await call('/api/speak', 'POST', { text: 'hi' })).status, 401);
+  assert.equal((await call('/api/speak', 'POST', { text: '   ' }, authed())).status, 400);
+  assert.equal((await call('/api/speak', 'POST', { text: 5 }, authed())).status, 400);
+  await new Promise(r => setTimeout(r, 100));
+  assert.equal((await call('/api/speak', 'POST', { text: 'hi' }, authed())).status, 409);   // no robot connected
+  assert.equal((await (await call('/api/status', 'GET', null, authed())).json()).voice, true);
 });

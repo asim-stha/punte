@@ -5,6 +5,7 @@
 //  - /vendor: serves the face-api library
 //  - relays commands from the website to the ESP32 (the robot connects to /esp)
 //  - relays the robot's events and mood to the website (touch, someone near, awake or asleep)
+//  - /api/speak: the voice container makes the audio, and we stream it to the robot's speaker
 //  - relays pictures from the ESP32-CAM to the website (the camera connects to /cam)
 // login, storage and ai are separate files in lib/ so each one is easy to swap
 const express = require('express');
@@ -18,15 +19,17 @@ const PORT = +process.env.PORT || 3000;
 const ESP_TOKEN = process.env.ESP_TOKEN || '';
 const CAM_TOKEN = process.env.CAM_TOKEN || '';          // empty = camera turned off
 const SYNC = new Set(['both', 'web', 'robot', 'none']);   // how the website and the robot work together
+const BYTES_PER_SECOND = 32000;                         // robot speaker: 16 kHz x 2 bytes
 const MAX_FRAME = 100 * 1024;                           // biggest picture we accept (bytes)
 
-let auth, storage, ai;
+let auth, storage, ai, tts;
 try {
   if (ESP_TOKEN.length < 16) throw new Error('Set ESP_TOKEN (16+ characters) in .env');
   if (CAM_TOKEN && CAM_TOKEN.length < 16) throw new Error('CAM_TOKEN must be 16+ characters (or leave it empty to turn the camera off)');
   auth = require('./lib/auth')(process.env);
   storage = require('./lib/storage')(process.env);
   ai = require('./lib/ai')(process.env);
+  tts = require('./lib/tts')(process.env);
 } catch (e) {
   console.error('Cannot start: ' + e.message);
   process.exit(1);
@@ -71,7 +74,22 @@ app.use('/api', wrap(async (req, res, next) => {
   next();
 }));
 
-app.get('/api/status', (req, res) => res.json({ esp: esps.size > 0, cam: cams.size > 0, model: ai.model, storage: storage.kind }));
+app.get('/api/status', (req, res) => res.json({ esp: esps.size > 0, cam: cams.size > 0, model: ai.model, storage: storage.kind, voice: tts.enabled }));
+
+// the robot speaks: text -> audio (voice container) -> robot, at the speed the speaker plays it
+app.post('/api/speak', wrap(async (req, res) => {
+  const text = typeof req.body?.text === 'string' ? req.body.text.trim().slice(0, 400) : '';
+  if (!text) return res.status(400).json({ error: 'text needed' });
+  if (!tts.enabled) return res.status(503).json({ error: 'voice engine is off' });
+  if (!esps.size) return res.status(409).json({ error: 'robot is offline' });
+  try {
+    const pcm = await tts.synth(text);
+    playToRobots(pcm);
+    res.json({ ms: Math.round(pcm.length / BYTES_PER_SECOND * 1000) });
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+}));
 
 app.get('/api/faces', wrap(async (req, res) => res.json(await storage.getFaces(req.user))));
 app.put('/api/faces', wrap(async (req, res) => {
@@ -112,6 +130,24 @@ const wss = new WebSocketServer({ noServer: true, maxPayload: 1024 });
 const camWss = new WebSocketServer({ noServer: true, maxPayload: MAX_FRAME });
 const esps = new Set(), cams = new Set(), browsers = new Set();
 const CMD = /^[xtnrpmlhuc]:-?\d{1,4}(\.\d{1,2})?$/;       // commands the esp32 understands
+
+// The robot has a small audio buffer, so the audio is sent at the speed it is played (a little ahead), not all at once.
+let playTimer = null;
+function playToRobots(pcm) {
+  clearTimeout(playTimer);                             // a new sentence replaces the old one
+  const start = Date.now();
+  let sent = 0;
+  const step = () => {
+    const due = Math.floor((Date.now() - start) / 1000 * BYTES_PER_SECOND) + 4096;
+    while (sent < pcm.length && sent < due) {
+      const end = Math.min(sent + 640, pcm.length);
+      for (const e of esps) if (e.readyState === 1) e.send(pcm.subarray(sent, end), { binary: true });
+      sent = end;
+    }
+    if (sent < pcm.length) playTimer = setTimeout(step, 20);
+  };
+  step();
+}
 
 const tell = (set, msg) => { for (const s of set) if (s.readyState === 1) s.send(msg); };
 const status = () => JSON.stringify({ esp: esps.size > 0, cam: cams.size > 0 });

@@ -71,7 +71,7 @@ export function useBuddy({ S, onLoggedOut }) {
 
   // Always holds the newest values, so long-running callbacks (camera loop, microphone) never use old ones.
   const live = useRef({});
-  live.current = { S, mem, faces };
+  live.current = { S, mem, faces, robot, info };
   const x = useRef({
     ws: null, closing: false, timer: 0, video: null, stream: null, loop: 0,
     cur: undefined, speaking: false, thinking: false, sayId: 0, awakeUntil: 0,
@@ -336,6 +336,7 @@ export function useBuddy({ S, onLoggedOut }) {
     u.rate = s.rate || 1;
     const v = speechSynthesis.getVoices().find(vv => vv.name === s.voice); if (v) u.voice = v;
     x.speaking = true; refreshBadge(); send('t:1');
+    const lv = live.current;
     const done = () => {                              // can only run once per sentence, and never gets stuck
       if (id !== x.sayId) return;
       x.speaking = false; x.mutedUntil = Date.now() + 1500;   // short pause, so the microphone does not hear the end of its own voice
@@ -343,9 +344,23 @@ export function useBuddy({ S, onLoggedOut }) {
       refreshBadge(); send('t:0');
       setTimeout(() => send('x:0'), 3000);
     };
-    u.onend = done; u.onerror = done;
-    setTimeout(done, 3000 + t.length * 90 / (s.rate || 1));
-    speechSynthesis.speak(u);
+    const laptop = () => {                            // the voice of this computer
+      u.onend = done; u.onerror = done;
+      setTimeout(done, 3000 + t.length * 90 / (s.rate || 1));
+      speechSynthesis.speak(u);
+    };
+    const place = s.voicePlace || 'both';             // 'laptop' | 'robot' | 'both'
+    if (place === 'laptop' || !lv.info.voice || !lv.robot || !controlsRobot(s.sync)) return laptop();
+    // the robot's own speaker: the server makes the audio and streams it to the robot
+    setTimeout(done, 25000);                          // never stays stuck if the server does not answer
+    api('speak', 'POST', { text: t }).then(r => {
+      if (id === x.sayId && place === 'robot') setTimeout(done, r.ms + 400);
+    }).catch(e => {
+      if (lostLogin(e)) return;
+      if (id === x.sayId) log('Robot voice did not work (' + e.message + ')' + (place === 'robot' ? ', using this computer instead.' : '.'));
+      if (id === x.sayId && place === 'robot') laptop();
+    });
+    if (place === 'both') laptop();
   }
 
   function openSite(o) {

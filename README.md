@@ -20,9 +20,10 @@ Made by CyberSquadNp, Dongshin University (Cloud Computing project).
         |  (nginx)  |     +-----------+
         +-----------+           |
         React website           |  private network (no internet, no public port)
-                          +-----------+
-                          | database  |   PostgreSQL: saved faces and memory
-                          +-----------+
+                          +-----------+     +-----------+
+                          | database  |     |    tts    |   Piper: the robot's voice (text to audio)
+                          +-----------+     +-----------+
+                          PostgreSQL: saved faces and memory
 
 ESP32 robot --wss--> proxy --> backend      (the robot connects OUT, so no router setup is needed)
 ESP32-CAM  --wss--> proxy --> backend      (pictures go to the website, only while someone watches)
@@ -34,14 +35,16 @@ ESP32-CAM  --wss--> proxy --> backend      (pictures go to the website, only whi
 | frontend | nginx (built from `frontend/`) | Serves the React website. |
 | backend | node (built from `backend/`) | REST API, login, robot relay, AI proxy, storage. |
 | database | postgres | Keeps faces and memory in a volume. Reachable only from the backend. |
+| tts | python + Piper (built from `tts/`) | Turns the AI's text into speech for the robot's speaker. Works offline. Reachable only from the backend. |
 
-An optional fifth container, `ollama`, can run the AI on the server (`--profile server-ai`).
+An optional sixth container, `ollama`, can run the AI on the server (`--profile server-ai`).
 
 ## Folders
 
 - `frontend/` React website (Vite)
 - `backend/` Node.js server
 - `database/` table script and backup scripts
+- `tts/` the robot's voice (Piper)
 - `proxy/` Caddy settings
 - `docker/` `docker-compose.yml` and `.env.example`
 - `firmware/desktop_body/` ESP32 code (Arduino)
@@ -57,7 +60,7 @@ An optional fifth container, `ollama`, can run the AI on the server (`--profile 
 3. In the same folder run: `docker compose up -d --build`
 4. Open https://localhost (accept the browser warning for the local certificate) and log in.
 
-Check that all four containers are healthy with `docker compose ps`, and the whole chain with `https://localhost/healthz`.
+Check that all five containers are healthy with `docker compose ps`, and the whole chain with `https://localhost/healthz`.
 
 ## Put it on Azure
 

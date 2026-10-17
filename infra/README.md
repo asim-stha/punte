@@ -3,7 +3,7 @@
 Scripts that build the cloud side of Punte on Microsoft Azure and keep it up to date.
 
 - `azure-setup.sh` runs in Azure Cloud Shell. It creates the resource group, backup storage, virtual machine, firewall rules and the VM's backup permission.
-- `vm-setup.sh` runs once on the VM. It installs Docker, gets the code, asks for the passwords and starts the four containers.
+- `vm-setup.sh` runs once on the VM. It installs Docker, gets the code, asks for the passwords and starts the five containers.
 - `deploy.sh` runs on the VM. It pulls the latest code and restarts what changed. The database volume is kept.
 
 ## First time

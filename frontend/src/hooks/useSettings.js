@@ -12,6 +12,7 @@ export const DEFAULTS = {
   bye: true,          // say goodbye when a known person leaves
   idle: true,         // do small fun things when it is quiet
   rate: 1, voice: '',
+  voicePlace: 'both', // where Punte talks: 'laptop' | 'robot' | 'both'
   aiSource: 'local',  // 'local' = this browser asks Ollama on this computer, 'server' = the server asks Ollama
   ol: 'http://localhost:11434',
   aiMode: 'auto',     // 'auto' = cloud first with the local model as backup, 'cloud' = cloud only, 'local' = local only
