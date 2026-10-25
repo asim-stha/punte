@@ -1,16 +1,12 @@
-// chat page: type or speak to punte
-import { useEffect, useRef, useState } from 'react';
-import MicButton from '../components/MicButton';
+// chat history panel: the whole conversation and quick things to say (typing is in the bar at the bottom)
+import { useEffect, useRef } from 'react';
 import ModePicker from '../components/ModePicker';
 
 const SUGGESTIONS = ['Say hello', 'Play some music', 'Look left', 'Spin around', 'Play music on YouTube'];
 
 export default function Chat({ b, S, set, hidden }) {
-  const [text, setText] = useState('');
   const logRef = useRef(null);
-  useEffect(() => { const el = logRef.current; if (el) el.scrollTop = el.scrollHeight; }, [b.messages]);
-
-  const submit = () => { const t = text.trim(); if (t) { setText(''); b.route(t); } };
+  useEffect(() => { const el = logRef.current; if (el) el.scrollTop = el.scrollHeight; }, [b.messages, hidden]);
 
   return (
     <section className="view" hidden={hidden}>
@@ -25,14 +21,8 @@ export default function Chat({ b, S, set, hidden }) {
             </div>
           ))}
         </div>
-        <div className="row" style={{ marginTop: 12, flexWrap: 'wrap' }}>
+        <div className="row" style={{ flexWrap: 'wrap' }}>
           {SUGGESTIONS.map(t => <button key={t} className="btn" onClick={() => b.route(t)}>{t}</button>)}
-        </div>
-        <div className="row" style={{ marginTop: 14 }}>
-          <input type="text" placeholder="Type to talk (no wake name needed)" aria-label="Type to talk" value={text}
-            onChange={e => setText(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} />
-          <button className="btn pri" onClick={submit}>Send</button>
-          <MicButton b={b} S={S} className="btn mic">&#127908;</MicButton>
         </div>
       </div>
     </section>

@@ -8,7 +8,7 @@ export default function MicButton({ b, S, className = 'btn pri', children }) {
     ? { onPointerDown: e => { e.preventDefault(); b.pttStart(); }, onPointerUp: b.pttStop, onPointerLeave: b.pttStop, onPointerCancel: b.pttStop }
     : { onClick: b.toggleListening };
   return (
-    <button className={className + (live ? ' live' : '')} aria-label="Talk" disabled={!S.mic}
+    <button type="button" className={className + (live ? ' live' : '')} aria-label="Talk" disabled={!S.mic}
       style={{ opacity: S.mic ? 1 : 0.4, touchAction: 'none' }} {...handlers}>
       {children}
     </button>
