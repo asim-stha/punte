@@ -8,7 +8,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    rollupOptions: { output: { manualChunks: { three: ['three'] } } }   // 3D library in its own file, so the rest of the site loads first
+    rollupOptions: {}
   },
   server: {
     port: 5173,

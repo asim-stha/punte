@@ -1,7 +1,5 @@
 // home page: camera, who punte sees and the status of robot, ai and storage
-import { useState } from 'react';
-import Face from '../components/Face';
-import Robot3D from '../components/Robot3D';
+import PunteRobot from '../components/PunteRobot';
 import MicButton from '../components/MicButton';
 import { NAMES, ROBOT_STATES } from '../lib/commands';
 
@@ -13,7 +11,6 @@ const modelText = (S, b) => {
 };
 
 export default function Home({ b, S, hidden }) {
-  const [no3d, setNo3d] = useState(false);             // true if the browser cannot run 3D: show the flat face instead
   return (
     <section className="view g2" hidden={hidden}>
       <div className="card hero span">
@@ -27,9 +24,7 @@ export default function Home({ b, S, hidden }) {
           </div>
           <div className="statusline"><span className="mu">Punte status</span><b>{b.badge}</b></div>
         </div>
-        {no3d
-          ? <Face n={b.face} />
-          : <Robot3D face={b.face} moodState={b.mood ? b.mood.state : 0} pan={b.head.pan} tilt={b.head.tilt} talking={b.badge === 'Speaking'} onFail={() => setNo3d(true)} />}
+        <PunteRobot face={b.face} moodState={b.mood ? b.mood.state : 0} pan={b.head.pan} tilt={b.head.tilt} talking={b.badge === 'Speaking'} />
       </div>
 
       <div className="card">
