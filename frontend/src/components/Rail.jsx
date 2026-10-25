@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { NAMES, SYNC_OPTIONS } from '../lib/commands';
 
 const KEYS = ['n', 'happy', 'sad', 'angry', 'sleepy', 'wow', 'love', 'think'];   // same order as NAMES
+const EMOJI = ['\u{1F610}', '\u{1F604}', '\u{1F622}', '\u{1F620}', '\u{1F634}', '\u{1F62E}', '\u{1F60D}', '\u{1F914}'];   // same order as NAMES
 const SYNC_SHORT = { both: 'Both', web: 'Web', robot: 'Robot', none: 'None' };
 const SYNC_HINT = {
   both: 'Website and robot move together',
@@ -13,6 +14,17 @@ const SYNC_HINT = {
 const PAN = 90;      // head turn range on the sliders (degrees)
 const TILT = 18;     // head up and down range (degrees)
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// a card that folds up; the title is the button
+function Card({ title, open = true, children }) {
+  const [on, setOn] = useState(open);
+  return (
+    <section className={'card glass' + (on ? '' : ' shut')}>
+      <h3><button type="button" aria-expanded={on} onClick={() => setOn(!on)}>{title}</button></h3>
+      <div className="fold" hidden={false} aria-hidden={!on}>{children}</div>
+    </section>
+  );
+}
 
 export default function Rail({ b, S, set, open, setFast }) {
   const [song, setSong] = useState('0');
@@ -72,8 +84,7 @@ export default function Rail({ b, S, set, open, setFast }) {
 
   return (
     <aside className={'rail' + (open ? ' open' : '')} aria-label="Controls">
-      <section className="card glass">
-        <h3>Camera</h3>
+      <Card title="Camera" open={false}>
         <div className="cam">
           <video ref={b.videoRef} autoPlay muted playsInline hidden={S.faceSource === 'robot'} />
           <div className="vph" hidden={b.cam.on && S.faceSource !== 'robot'}>
@@ -81,21 +92,19 @@ export default function Rail({ b, S, set, open, setFast }) {
           </div>
         </div>
         <div className="camrow"><span>Seen <b>{b.who}</b></span><button className="btn sm" onClick={b.learnFace}>Learn face</button></div>
-      </section>
+      </Card>
 
-      <section className="card glass">
-        <h3>Mood</h3>
+      <Card title="Mood" open={true}>
         <div className="orbs">
           {NAMES.map((n, i) => (
             <button key={n} className="orb" aria-pressed={b.face === i} style={{ '--c': 'var(--c-' + KEYS[i] + ')' }} onClick={() => b.send('x:' + i)}>
-              <i /><span>{n}</span>
+              <i aria-hidden="true">{EMOJI[i]}</i><span>{n}</span>
             </button>
           ))}
         </div>
-      </section>
+      </Card>
 
-      <section className="card glass">
-        <h3>Head</h3>
+      <Card title="Head" open={true}>
         <div className="pad" ref={padRef} tabIndex={0} role="application" aria-label="Head control. Drag, or use the arrow keys."
           onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); fromPointer(e); }}
           onPointerMove={e => { if (e.buttons) fromPointer(e); }}
@@ -129,20 +138,18 @@ export default function Rail({ b, S, set, open, setFast }) {
           <option value="mouse">The mouse</option>
           <option value="off">Nothing (stay still)</option>
         </select>
-      </section>
+      </Card>
 
-      <section className="card glass">
-        <h3>Sync</h3>
+      <Card title="Sync" open={false}>
         <div className="seg c4">
           {SYNC_OPTIONS.map(([v]) => (
             <button key={v} aria-pressed={S.sync === v} onClick={() => set({ sync: v })}>{SYNC_SHORT[v]}</button>
           ))}
         </div>
         <p className="hint">{SYNC_HINT[S.sync]}</p>
-      </section>
+      </Card>
 
-      <section className="card glass">
-        <h3>Music</h3>
+      <Card title="Music" open={false}>
         <select id="song" aria-label="Song" value={song} onChange={e => setSong(e.target.value)}>
           <option value="0">Song 1</option><option value="1">Song 2</option><option value="2">Song 3</option>
         </select>
@@ -150,7 +157,7 @@ export default function Rail({ b, S, set, open, setFast }) {
           <button className="btn pri" style={{ flex: 1 }} onClick={() => b.send('m:' + song)}>Play</button>
           <button className="btn" style={{ flex: 1 }} onClick={() => b.send('m:-1')}>Stop</button>
         </div>
-      </section>
+      </Card>
     </aside>
   );
 }

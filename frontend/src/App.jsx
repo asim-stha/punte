@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 import { useSettings } from './hooks/useSettings';
 import { useBuddy } from './hooks/useBuddy';
-import { FACE_CLASS, NAMES, showsFace } from './lib/commands';
+import { FACE_CLASS, showsFace } from './lib/commands';
 import Login from './components/Login';
 import PunteRobot from './components/PunteRobot';
 import Rail from './components/Rail';
@@ -22,25 +22,25 @@ const PANES = [
 ];
 const CONTROLS_ICON = 'M4 7h10M18 7h2M4 17h2M10 17h10M16 5v4M8 15v4';
 
-const modelText = (S, b) => {
-  if (S.aiSource !== 'local') return b.info.model || 'Server AI';
-  if (S.aiMode === 'cloud') return S.cloudModel;
-  if (S.aiMode === 'local') return S.localModel;
-  return S.cloudModel + ' (backup: ' + S.localModel + ')';
-};
-
 export default function App() {
   const [authed, setAuthed] = useState(null);          // null = checking
   const [S, set] = useSettings();
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem('punteTheme') || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'); } catch (e) { return 'dark'; }
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem('punteTheme', theme); } catch (e) { /* ignore */ }
+  }, [theme]);
 
   useEffect(() => { api('status').then(() => setAuthed(true)).catch(() => setAuthed(false)); }, []);
 
   if (authed === null) return null;
   if (!authed) return <Login onDone={() => setAuthed(true)} />;
-  return <Room S={S} set={set} onLoggedOut={() => setAuthed(false)} />;
+  return <Room S={S} set={set} theme={theme} setTheme={setTheme} onLoggedOut={() => setAuthed(false)} />;
 }
 
-function Room({ S, set, onLoggedOut }) {
+function Room({ S, set, theme, setTheme, onLoggedOut }) {
   const b = useBuddy({ S, onLoggedOut });
   const [pane, setPane] = useState(null);              // which side panel is open
   const [rail, setRail] = useState(false);             // controls open (phone only)
@@ -68,16 +68,15 @@ function Room({ S, set, onLoggedOut }) {
 
   return (
     <div className={cls} data-f={f}>
-      <PunteRobot f={f} asleep={asleep} pan={b.head.pan} tilt={b.head.tilt} talking={talking} say={lastSaid ? lastSaid.text : ''} fast={fast} />
+      <PunteRobot f={f} asleep={asleep} pan={b.head.pan} tilt={b.head.tilt} talking={talking} listening={listening} say={lastSaid ? lastSaid.text : ''} fast={fast} />
 
       <header className="top">
         <div className="brand"><span className="lm"><i /><i /></span>Punte</div>
         <div className="pills">
           <span className={'pill' + robotClass}><span className="dot" />{robotText}</span>
-          <span className="pill">Seen <b>{b.who}</b></span>
-          <span className="pill ai">{modelText(S, b)}</span>
+          <span className="pill seen">Seen <b>{b.who}</b></span>
           <span className={'pill' + (b.badge === 'Idle' ? '' : ' live')}><span className="dot" />{b.badge}</span>
-          <span className="pill">Mood <b>{asleep ? 'Asleep' : NAMES[b.face] || 'Neutral'}</b></span>
+          <button className="btn sm" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>{theme === 'light' ? 'Dark' : 'Light'}</button>
           {!b.started && <button className="btn pri sm" onClick={b.connect}>Connect</button>}
         </div>
       </header>

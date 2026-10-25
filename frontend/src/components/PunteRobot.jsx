@@ -1,11 +1,12 @@
 // The Punte robot on the stage: white body, glowing visor eyes, ears and floating rings.
-// App puts the mood on the room (data-f) and this file draws the robot and its speech bubble.
+// App puts the mood on the room (data-f). The real 3D robot is drawn by lib/punte3d.js;
+// the flat CSS robot below is only used when the browser cannot do 3D.
 import { useEffect, useRef, useState } from 'react';
 
 const TILT_OFF = { sad: -9, sleepy: -14, happy: 4, angry: 3 };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-export default function PunteRobot({ f = 'n', asleep = false, pan = 0, tilt = 0, talking = false, say = '', fast = false }) {
+function FlatRobot({ f = 'n', asleep = false, pan = 0, tilt = 0, talking = false, say = '', fast = false }) {
   const box = useRef(null);
   const rig = useRef(null);
   const prev = useRef(f);
@@ -99,6 +100,7 @@ export default function PunteRobot({ f = 'n', asleep = false, pan = 0, tilt = 0,
             <i className="halo" />
             <i className="fx" />
             <div className="headg">
+              <i className="hl h5" /><i className="hl h4" /><i className="hl h3" /><i className="hl h2" /><i className="hl h1" />
               <i className="ant l" /><i className="ant r" />
               <i className="bump l" /><i className="bump r" />
               <i className="ear l" /><i className="ear r" />
@@ -114,9 +116,12 @@ export default function PunteRobot({ f = 'n', asleep = false, pan = 0, tilt = 0,
                 </div>
               </div>
             </div>
-            <i className="arm l" /><i className="arm r" />
-            <div className="torso">
-              <div className="plate"><div className="eq"><b /><b /><b /><b /><b /></div></div>
+            <div className="bodyg">
+              <div className="armw"><i className="arm l" /><i className="arm r" /></div>
+              <i className="bl b5" /><i className="bl b4" /><i className="bl b3" /><i className="bl b2" /><i className="bl b1" />
+              <div className="torso">
+                <div className="plate"><div className="eq"><b /><b /><b /><b /><b /></div></div>
+              </div>
             </div>
             <i className="ring r1" /><i className="ring r2" />
           </div>
@@ -124,4 +129,57 @@ export default function PunteRobot({ f = 'n', asleep = false, pan = 0, tilt = 0,
       </div>
     </>
   );
+}
+
+function Robot3D({ f = 'n', asleep = false, pan = 0, tilt = 0, talking = false, listening = false, say = '', onFail }) {
+  const cv = useRef(null);
+  const bub = useRef(null);
+  const p3 = useRef(null);
+  const hide = useRef(null);
+  const [show, setShow] = useState(false);
+  const live = useRef({});
+  live.current = { f, asleep, pan, tilt, talking, listening };
+
+  useEffect(() => {
+    let dead = false, ro = null;
+    (async () => {
+      try {
+        const [THREE, lib] = await Promise.all([import('three'), import('../lib/punte3d.js')]);
+        if (dead || !cv.current) return;
+        p3.current = lib.createPunte(THREE, cv.current, {
+          onProject: (x, y) => { const el = bub.current; if (el) { el.style.left = x + 'px'; el.style.top = y + 'px'; } }
+        });
+        p3.current.setState(live.current);
+        if (window.ResizeObserver) { ro = new ResizeObserver(() => p3.current && p3.current.resize()); ro.observe(cv.current); }
+      } catch (e) { if (!dead) onFail(); }
+    })();
+    return () => { dead = true; if (ro) ro.disconnect(); if (p3.current) { p3.current.dispose(); p3.current = null; } };
+  }, []);
+
+  useEffect(() => {
+    if (p3.current) p3.current.setState({ f, asleep, pan, tilt, talking, listening });
+  }, [f, asleep, pan, tilt, talking, listening]);
+
+  useEffect(() => {
+    clearTimeout(hide.current);
+    if (talking && say) setShow(true);
+    else hide.current = setTimeout(() => setShow(false), 2500);
+    return () => clearTimeout(hide.current);
+  }, [talking, say]);
+
+  return (
+    <>
+      <div className="stage" />
+      <div className="pausebadge">Website robot paused</div>
+      <canvas className="rcanvas" ref={cv} aria-label="Punte robot in 3D. Drag to look around it." />
+      <div className={'bubble3d' + (show ? ' show' : '')} ref={bub} role="status">{say}</div>
+    </>
+  );
+}
+
+export default function PunteRobot(props) {
+  const [flat, setFlat] = useState(() => {
+    try { const c = document.createElement('canvas'); return !(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return true; }
+  });
+  return flat ? <FlatRobot {...props} /> : <Robot3D {...props} onFail={() => setFlat(true)} />;
 }
