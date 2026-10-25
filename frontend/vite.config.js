@@ -5,7 +5,11 @@ import react from '@vitejs/plugin-react';
 // and sends api, websocket and face library requests to the server on port 3000
 export default defineConfig({
   plugins: [react()],
-  build: { outDir: 'dist', emptyOutDir: true },
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+    rollupOptions: { output: { manualChunks: { three: ['three'] } } }   // 3D library in its own file, so the rest of the site loads first
+  },
   server: {
     port: 5173,
     proxy: {

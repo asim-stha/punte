@@ -58,6 +58,7 @@ export function useBuddy({ S, onLoggedOut }) {
   const [cam, setCam] = useState({ on: false, note: 'Press Connect to start the camera' });
   const [started, setStarted] = useState(false);
   const [mood, setMood] = useState(null);               // the real robot's mood: { expr, state }
+  const [head, setHead] = useState({ pan: 0, tilt: 0 }); // head turn shown by the 3D robot on the page
   const [robotCam, setRobotCam] = useState(false);       // is the ESP32-CAM connected to the server
   const [viewing, setViewing] = useState(false);         // is the Camera page open
   const [mem, setMem] = useState({ facts: [], chat: [] });
@@ -95,7 +96,11 @@ export function useBuddy({ S, onLoggedOut }) {
   const send = s => {
     const w = x.ws, sync = live.current.S.sync;
     if (w && w.readyState === 1 && controlsRobot(sync)) w.send(s);     // the server also checks this
-    if (s.startsWith('x:') && showsFace(sync)) setFace(+s.slice(2));
+    if (showsFace(sync)) {                                             // the robot shown on the page copies these too
+      if (s.startsWith('x:')) setFace(+s.slice(2));
+      else if (s.startsWith('p:')) setHead(h => ({ ...h, pan: +s.slice(2) }));
+      else if (s.startsWith('h:')) setHead(h => ({ ...h, tilt: +s.slice(2) }));
+    }
   };
 
   function openWs() {
@@ -561,7 +566,7 @@ export function useBuddy({ S, onLoggedOut }) {
 
   return {
     // state
-    robot, robotCam, mood, face, badge, messages, who, cam, started, mem, faces, info, listening, holding, ai, models, modelNote,
+    robot, robotCam, mood, face, head, badge, messages, who, cam, started, mem, faces, info, listening, holding, ai, models, modelNote,
     videoRef, robotCanvasRef, setViewing,
     // actions
     send, say, route, connect, setCamera, learnFace, deletePerson,
