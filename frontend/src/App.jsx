@@ -3,23 +3,24 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 import { useSettings } from './hooks/useSettings';
 import { useBuddy } from './hooks/useBuddy';
-import { FACE_CLASS, showsFace } from './lib/commands';
+import { FACE_CLASS } from './lib/commands';
 import Login from './components/Login';
 import PunteRobot from './components/PunteRobot';
+import RobotView from './components/RobotView';
 import Rail from './components/Rail';
 import ChatBar from './components/ChatBar';
 import Chat from './views/Chat';
-import Camera from './views/Camera';
 import Memory from './views/Memory';
 import Settings from './views/Settings';
 
 // panels that slide out from the left dock
 const PANES = [
   ['chat', 'Chat history', 'M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.6A8 8 0 1 1 21 12z'],
-  ['camera', 'Robot camera', 'M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zM12 10a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z'],
   ['memory', 'Memory', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2'],
   ['settings', 'Settings', 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1']
 ];
+const SCREEN_ICON = 'M3 5h18v11H3zM8 20h8M12 16v4';
+const BOT_ICON = 'M5 9h14v10H5zM12 9V5M9 14h.01M15 14h.01';
 const CONTROLS_ICON = 'M4 7h10M18 7h2M4 17h2M10 17h10M16 5v4M8 15v4';
 
 export default function App() {
@@ -46,32 +47,43 @@ function Room({ S, set, theme, setTheme, onLoggedOut }) {
   const [rail, setRail] = useState(false);             // controls open (phone only)
   const [fast, setFast] = useState(false);             // quick head moves (nod, shake)
   const logout = async () => { try { await fetch('/api/logout', { method: 'POST' }); } catch (e) { /* ignore */ } onLoggedOut(); };
-  const toggle = p => setPane(pane === p ? null : p);
+  const toggle = p => { setRail(false); setPane(pane === p ? null : p); };
 
-  useEffect(() => { b.setViewing(pane === 'camera'); }, [pane]);
+  const robotMode = S.appMode === 'robot';
+  const pick = m => { if (m === S.appMode) return; setPane(null); setRail(false); set({ appMode: m }); };
+  useEffect(() => { b.setViewing(robotMode); }, [robotMode]);     // the robot camera picture is needed in robot mode only
+  useEffect(() => { try { speechSynthesis.cancel(); } catch (e) { /* ignore */ } }, [S.appMode]);   // stop talking when the mode changes
   useEffect(() => {
     const esc = e => { if (e.key === 'Escape') setPane(null); };
     addEventListener('keydown', esc);
     return () => removeEventListener('keydown', esc);
   }, []);
 
-  const asleep = !!b.mood && b.mood.state === 2;
-  const f = asleep ? 'sleepy' : (FACE_CLASS[b.face] || 'n');
+  // website mode never looks at the real robot, robot mode shows what the real robot reports
+  const asleep = robotMode && !!b.mood && b.mood.state === 2;
+  const expr = robotMode ? (b.mood ? b.mood.expr : 0) : b.face;
+  const f = asleep ? 'sleepy' : (FACE_CLASS[expr] || 'n');
   const talking = b.badge === 'Speaking';
   const listening = b.listening || b.holding;
   const lastSaid = [...b.messages].reverse().find(m => m.cls === 'bot');
-  const robotClass = b.robot === null ? '' : b.robot ? ' ok' : ' bad';
-  const robotText = b.robot === null ? 'Checking robot...' : b.robot ? 'Robot online' : 'Robot offline';
+  const robotClass = !robotMode || b.robot === null ? '' : b.robot ? ' ok' : ' bad';
+  const robotText = !robotMode ? 'Robot not used' : b.robot === null ? 'Checking robot...' : b.robot ? 'Robot online' : 'Robot offline';
   const title = (PANES.find(p => p[0] === pane) || [])[1];
 
-  const cls = 'room' + (asleep ? ' asleep' : '') + (listening ? ' listening' : '') + (talking ? ' talking' : '') + (showsFace(S.sync) ? '' : ' paused');
+  const cls = 'room' + (asleep ? ' asleep' : '') + (listening ? ' listening' : '') + (talking ? ' talking' : '') + (robotMode ? ' m-robot' : ' m-web');
 
   return (
     <div className={cls} data-f={f}>
-      <PunteRobot f={f} asleep={asleep} pan={b.head.pan} tilt={b.head.tilt} talking={talking} listening={listening} say={lastSaid ? lastSaid.text : ''} fast={fast} />
+      {robotMode
+        ? <RobotView b={b} S={S} />
+        : <PunteRobot f={f} asleep={asleep} pan={b.head.pan} tilt={b.head.tilt} talking={talking} listening={listening} say={lastSaid ? lastSaid.text : ''} fast={fast} />}
 
       <header className="top">
         <div className="brand"><span className="lm"><i /><i /></span>Punte</div>
+        <div className="modesw" role="group" aria-label="Mode">
+          <button type="button" aria-pressed={!robotMode} onClick={() => pick('web')}><svg viewBox="0 0 24 24"><path d={SCREEN_ICON} /></svg>Website</button>
+          <button type="button" aria-pressed={robotMode} onClick={() => pick('robot')}><svg viewBox="0 0 24 24"><path d={BOT_ICON} /></svg>Robot</button>
+        </div>
         <div className="pills">
           <span className={'pill' + robotClass}><span className="dot" />{robotText}</span>
           <span className="pill seen">Seen <b>{b.who}</b></span>
@@ -87,7 +99,7 @@ function Room({ S, set, theme, setTheme, onLoggedOut }) {
             <svg viewBox="0 0 24 24"><path d={path} /></svg><span className="tip">{name}</span>
           </button>
         ))}
-        <button className="dbtn ctl-btn" aria-pressed={rail} aria-label="Controls" onClick={() => setRail(!rail)}>
+        <button className="dbtn ctl-btn" aria-pressed={rail} aria-label="Controls" onClick={() => { setPane(null); setRail(!rail); }}>
           <svg viewBox="0 0 24 24"><path d={CONTROLS_ICON} /></svg><span className="tip">Controls</span>
         </button>
       </nav>
@@ -95,11 +107,10 @@ function Room({ S, set, theme, setTheme, onLoggedOut }) {
       <Rail b={b} S={S} set={set} open={rail} setFast={setFast} />
       <ChatBar b={b} S={S} />
 
-      {/* the panels stay mounted (just hidden), so the robot camera picture keeps arriving */}
+      {/* the panels stay mounted (just hidden) */}
       <section className={'drawer glass' + (pane ? ' open' : '')} aria-label={title || 'Panel'}>
         <div className="dhead"><h2>{title}</h2><button className="x" aria-label="Close" onClick={() => setPane(null)}>&times;</button></div>
         <Chat b={b} S={S} set={set} hidden={pane !== 'chat'} />
-        <Camera b={b} S={S} set={set} hidden={pane !== 'camera'} />
         <Memory b={b} hidden={pane !== 'memory'} />
         <Settings b={b} S={S} set={set} onLogout={logout} hidden={pane !== 'settings'} />
       </section>

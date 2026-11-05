@@ -7,7 +7,8 @@ export const DEFAULTS = {
   cam: true,          // camera on
   mic: true,          // microphone allowed
   faceSource: 'laptop', // camera used for faces: 'laptop' = this computer, 'robot' = the ESP32-CAM
-  sync: 'both',       // website and robot: 'both' | 'web' | 'robot' | 'none'
+  appMode: 'web',     // 'web' = only the website robot, 'robot' = only the real robot (this decides the four settings below)
+  sync: 'web',        // set by appMode: who reacts
   lookAt: 'face',     // where the head looks: 'face' = follows your face, 'mouse' = follows the mouse, 'off'
   bye: true,          // say goodbye when a known person leaves
   idle: true,         // do small fun things when it is quiet
@@ -24,6 +25,12 @@ export const DEFAULTS = {
   away: 2             // minutes away before the same person is greeted again
 };
 
+// What each mode fixes: who reacts, which microphone and camera are used, and where Punte talks.
+export const MODE_SETTINGS = {
+  web: { sync: 'web', listenSource: 'laptop', faceSource: 'laptop', voicePlace: 'laptop' },
+  robot: { sync: 'robot', listenSource: 'robot', faceSource: 'robot', voicePlace: 'robot' }
+};
+
 // Settings are kept in this browser only (they are not secret).
 export function useSettings() {
   const [S, setS] = useState(() => {
@@ -34,5 +41,5 @@ export function useSettings() {
     try { localStorage.setItem('punte', JSON.stringify(next)); } catch (e) { /* private window: just do not save */ }
     return next;
   });
-  return [S, update];
+  return [{ ...S, ...(MODE_SETTINGS[S.appMode] || MODE_SETTINGS.web) }, update];
 }

@@ -171,8 +171,10 @@ function Robot3D({ f = 'n', asleep = false, pan = 0, tilt = 0, talking = false, 
     <>
       <div className="stage" />
       <div className="pausebadge">Website robot paused</div>
-      <canvas className="rcanvas" ref={cv} aria-label="Punte robot in 3D. Drag to look around it." />
-      <div className={'bubble3d' + (show ? ' show' : '')} ref={bub} role="status">{say}</div>
+      <div className="rstage">
+        <canvas className="rcanvas" ref={cv} aria-label="Punte robot in 3D. Drag to look around it." />
+        <div className={'bubble3d' + (show ? ' show' : '')} ref={bub} role="status">{say}</div>
+      </div>
     </>
   );
 }

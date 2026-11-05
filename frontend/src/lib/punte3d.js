@@ -215,10 +215,10 @@ export function createPunte(THREE, canvas, opts = {}) {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     const small = w <= 860, tan = Math.tan(rad(camera.fov / 2));
-    const dH = (4.4 / (small ? 0.42 : 0.66)) / (2 * tan);
+    const dH = (4.4 / (small ? 0.8 : 0.66)) / (2 * tan);
     const dW = (3.5 / (small ? 0.92 : 0.7)) / (2 * tan * camera.aspect);
     const d = Math.max(dH, dW);
-    const ly = small ? 0.62 : 0.28;
+    const ly = 0.28;
     camera.position.set(0, ly, d); camera.lookAt(0, ly, 0);
     camera.updateProjectionMatrix();
   }

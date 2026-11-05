@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react';
 import Toggle from '../components/Toggle';
 import ModePicker from '../components/ModePicker';
-import { SYNC_OPTIONS } from '../lib/commands';
 
 function useVoices() {
   const [voices, setVoices] = useState([]);
@@ -33,19 +32,16 @@ function ModelPick({ id, label, value, options, onChange }) {
 export default function Settings({ b, S, set, onLogout, hidden }) {
   const voices = useVoices();
   const local = S.aiSource === 'local';
+  const robotMode = S.appMode === 'robot';
   const cloudList = [...new Set(['gemma4:31b-cloud', ...b.models.filter(m => /cloud/i.test(m))])];
   const localList = [...new Set(['llama3.1:8b', 'qwen3.5:4b', 'llama3.2:3b', ...b.models.filter(m => !/cloud/i.test(m))])];
   return (
     <section className="view g2" hidden={hidden}>
       <div className="card">
+        <span className="tag">{robotMode ? 'Robot mode' : 'Website mode'}</span>
         <h2>Connection</h2>
         <div className="line"><span className="mu">Server</span><b>{location.host}</b></div>
-        <div className="line"><span className="mu">Robot</span><b>{b.robot === null ? 'Checking...' : b.robot ? 'Online' : 'Offline'}</b></div>
-        <label htmlFor="sync">Robot and website</label>
-        <select id="sync" value={S.sync} onChange={e => set({ sync: e.target.value })}>
-          {SYNC_OPTIONS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
-        </select>
-        <p className="mu" style={{ fontSize: 13 }}>Both: commands go to the robot and the face on this page copies the robot. Website only: the page reacts but the robot gets no commands. Robot only: the robot gets commands and the page stays still. Neither: nothing is sent or shown.</p>
+        {robotMode && <div className="line"><span className="mu">Robot</span><b>{b.robot === null ? 'Checking...' : b.robot ? 'Online' : 'Offline'}</b></div>}
         <label htmlFor="ai">Who answers questions</label>
         <select id="ai" value={S.aiSource} onChange={e => set({ aiSource: e.target.value })}>
           <option value="server">The server (Ollama on the server)</option>
@@ -66,13 +62,12 @@ export default function Settings({ b, S, set, onLogout, hidden }) {
 
       <div className="card">
         <h2>Voice</h2>
-        <label htmlFor="ls">Listen with</label>
-        <select id="ls" value={S.listenSource} onChange={e => set({ listenSource: e.target.value })}>
-          <option value="laptop">The microphone of this computer</option>
-          <option value="robot">The robot's microphone</option>
-        </select>
-        {S.listenSource === 'robot' && <p className="mu" style={{ fontSize: 13 }}>
+        <div className="fixed"><span className="mu">Microphone</span><b>{robotMode ? 'Robot' : 'This computer'}</b></div>
+        <div className="fixed"><span className="mu">Camera</span><b>{robotMode ? 'Robot' : 'This computer'}</b></div>
+        <div className="fixed"><span className="mu">Punte talks on</span><b>{robotMode ? 'Robot speaker' : 'This computer'}</b></div>
+        {robotMode && <p className="mu" style={{ fontSize: 13 }}>
           {b.info.ears ? 'Stay within 1 to 2 meters of the robot. Press the microphone button to start. Push-to-talk works like the wake name here.' : 'The listening engine is off on the server.'}
+          {!b.info.voice && ' The voice engine is off on the server, so this computer talks.'}
         </p>}
         <label htmlFor="mode">Voice mode</label>
         <select id="mode" value={S.mode} onChange={e => set({ mode: e.target.value })}>
@@ -84,13 +79,6 @@ export default function Settings({ b, S, set, onLogout, hidden }) {
           <label htmlFor="wake">Wake name (separate several with commas)</label>
           <input type="text" id="wake" value={S.wake} onChange={e => set({ wake: e.target.value })} />
         </>}
-        <label htmlFor="vp">Where Punte talks</label>
-        <select id="vp" value={S.voicePlace} onChange={e => set({ voicePlace: e.target.value })}>
-          <option value="both">Robot speaker and this computer</option>
-          <option value="robot">Robot speaker only</option>
-          <option value="laptop">This computer only</option>
-        </select>
-        {S.voicePlace !== 'laptop' && !b.info.voice && <p className="mu" style={{ fontSize: 13 }}>The voice engine is off on the server, so this computer talks.</p>}
         <label htmlFor="vc">Voice of this computer</label>
         <select id="vc" value={S.voice} onChange={e => set({ voice: e.target.value })}>
           <option value="">Default</option>
