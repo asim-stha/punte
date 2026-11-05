@@ -270,7 +270,7 @@ export function useBuddy({ S, onLoggedOut }) {
             if (now - x.lastSeen > (+s.away || 2) * 60000) x.greetOK = true;   // away long enough: greet again
             x.lastSeen = now;
             const b = d.box, err = (b.x + b.width / 2) / (V.videoWidth || V.width) - 0.5;
-            if (s.lookAt === 'face') aim(err * 2 * GAIN * SIGN);
+            if (s.lookAt === 'face') aim(err * 2 * GAIN * (showsFace(s.sync) ? -SIGN : SIGN));   // the camera picture is not mirrored: the robot on the page turns the other way
             if (now - x.lastRec > 3000) { x.lastRec = now; await A.current.recognize(); }
           } else {
             if (s.lookAt === 'face' && x.lastP !== 0 && now - x.lastSeen > 6000) { x.lastP = 0; A.current.send('p:0'); }   // nobody there: look straight again
