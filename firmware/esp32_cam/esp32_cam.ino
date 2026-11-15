@@ -3,7 +3,22 @@
 // and only asks for pictures while someone is looking at them.
 // Libs: WebSockets (Markus Sattler)
 // Board: "AI Thinker ESP32-CAM", partition scheme: Huge APP (3MB No OTA)
-#include <WiFi.h>
+#includ
+123456789
+  else if (type == WStype_TEXT) {
+    streaming = (length == 2 && payload[0] == 'o' && payload[1] == 'n');
+    say(streaming ? "someone is watching: sending pictures" : "nobody is watching: paused");
+  }
+}
+
+void connectWifi() {
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);                  // sleeping WiFi makes the picture stutter
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+
+Not connected. Select a board and a port to connect automatically.
+New Line
+e <WiFi.h>
 #include <WebSocketsClient.h>
 #include "esp_camera.h"
 #include "secrets.h"   // WIFI_SSID, WIFI_PASS, CLOUD_HOST, CAM_TOKEN

@@ -16,6 +16,7 @@ export default function RobotView({ b, S }) {
           <div className="rv-card"><small>Robot</small><b>{state}</b></div>
           <div className="rv-card"><small>Listening with</small><b>Robot microphone</b>{!b.info.ears && <small>The listening engine is off on the server</small>}</div>
           <div className="rv-card"><small>Talking with</small><b>{b.info.voice && b.robot ? 'Robot speaker' : 'This computer'}</b>{!(b.info.voice && b.robot) && <small>The robot cannot speak right now</small>}</div>
+          <div className="rv-card"><small>Last event</small><b>{b.lastEv ? b.lastEv.text.replace('Punte ', '') : 'Nothing yet'}</b></div>
           <div className="rv-card"><small>Seen</small><b>{b.who}</b></div>
         </div>
       </div>

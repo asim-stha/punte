@@ -25,11 +25,8 @@ const int IN[4] = {14, 27, 26, 25};          // ULN2003 IN1..IN4
 #define SPK_WS 23
 #define SPK_DOUT 16
 #define DHT_PIN 17
-#define TRIG_PIN 5
-#define ECHO_PIN 35      // behind the voltage divider
 #define PIR_PIN 36       // labeled VP on the board
-#define KNOB_PIN 39      // labeled VN on the board
-#define BUTTON_PIN 15    // other leg to GND
+#define IR_PIN 35        // pet sensor OUT, goes LOW when a hand is close (sensor VCC on 3.3V)
 
 // ---------- options ----------
 #define USE_SERVO 1        // 1 = head tilt on a servo, 0 = tilt with the stepper
@@ -46,8 +43,6 @@ const int SERVO_CENTER = 90;         // servo angle when the head is level
 const int TILT_DIR = 1;              // -1 if the head moves the wrong way
 const int CLAP_LEVEL = 8000;         // mic level that counts as a clap
 const int VOICE_MIN = 250;           // lowest mic level that counts as a voice
-const int NEAR_CM = 60;              // someone closer than this is "near"
-const int CLOSE_CM = 10;             // closer than this is a surprise
 const unsigned long DROWSY_AFTER = 90000;
 const unsigned long SLEEP_AFTER = 150000;
 
@@ -147,7 +142,7 @@ StreamBufferHandle_t micOut, spkIn;
 volatile int chirpReq = 0;
 volatile bool evSound = false, evVoice = false;
 volatile int micLevel = 0;
-volatile int spkVol = 3000;      // speaker loudness, set by the knob
+volatile int spkVol = 3500;      // speaker loudness, fixed
 volatile unsigned long quietUntil = 0;
 static int32_t micRaw[FRAMES * 2];
 static int16_t spkMono[FRAMES * 2];
@@ -449,26 +444,16 @@ void mind() {
   }
 }
 
-// ---------- sensors: eyes (distance), PIR, DHT11, knob, button ----------
-volatile unsigned long echoRise = 0, echoFall = 0;
-volatile bool echoDone = false;
-float distCm = -1;                // -1 when nothing came back
-bool pinging = false, personNear = false;
-int nearCount = 0, farCount = 0;
-unsigned long pingAt = 0, lastGreet = 0, lastClose = 0;
+// ---------- sensors: PIR, DHT11, IR pet sensor ----------
+unsigned long lastGreet = 0;
 int pirLast = 0;
 unsigned long lastPirRefresh = 0;
 unsigned long lastDht = 0;
-int knobAvg = 0, knobPct = 0;
-unsigned long knobTick = 0;
-bool btnHeld = false, btnLong = false;
-unsigned long btnDown = 0;
+bool irRaw = false, irNow = false;
+unsigned long irChange = 0;
+bool handHeld = false, handLong = false;
+unsigned long handDown = 0;
 unsigned long lastSensorPrint = 0;
-
-void IRAM_ATTR onEcho() {
-  if (digitalRead(ECHO_PIN)) echoRise = micros();
-  else { echoFall = micros(); echoDone = true; }
-}
 
 void petRobot() {
   lastInteract = millis();
@@ -480,41 +465,6 @@ void petRobot() {
 
 void sensorsRun() {
   unsigned long t = millis();
-
-  // eyes: send a ping, then read the echo time when the interrupt has caught it
-  if (!pinging && t - pingAt >= 150) {
-    pingAt = t; pinging = true; echoDone = false;
-    digitalWrite(TRIG_PIN, HIGH); delayMicroseconds(10); digitalWrite(TRIG_PIN, LOW);
-  } else if (pinging && (echoDone || t - pingAt > 35)) {
-    pinging = false;
-    float cm = -1;
-    if (echoDone) {
-      cm = (float)(echoFall - echoRise) * 0.0343f / 2;
-      if (cm < 2 || cm > 250) cm = -1;
-    }
-    distCm = cm;
-    if (cm >= 2 && cm <= NEAR_CM) { nearCount++; farCount = 0; }
-    else if (cm < 0 || cm > 100) { farCount++; nearCount = 0; }
-    else nearCount = 0;
-
-    if (!personNear && nearCount >= 2) {
-      personNear = true;
-      if (t - lastGreet > 8000) {
-        lastGreet = t;
-        lastInteract = t;
-        if (state != AWAKE) wakeUp();
-        else if (!talking && song < 0) {
-          setAuto(1, 2500); chirpReq = 1;
-          if (t > tiltManualUntil) { tiltTarget = 8; tiltBack = t + 3000; }
-        }
-        sendEvent("ev:near");
-      }
-    }
-    if (personNear && farCount >= 8) personNear = false;
-    if (personNear && cm >= 2 && cm < CLOSE_CM && nearCount >= 2 && state == AWAKE && !talking && song < 0 && t - lastClose > 6000) {
-      lastClose = t; setAuto(5, 1500); chirpReq = 4;
-    }
-  }
 
   // PIR: motion wakes the robot, it settles for the first minute after power on
   int pir = digitalRead(PIR_PIN);
@@ -534,31 +484,20 @@ void sensorsRun() {
   }
   pirLast = pir;
 
-  // knob: speaker volume
-  if (t - knobTick >= 100) {
-    knobTick = t;
-    knobAvg += (analogRead(KNOB_PIN) - knobAvg) / 4;
-    int pct = map(knobAvg, 0, 4095, 0, 100);
-    spkVol = 200 + pct * 70;
-    if (abs(pct - knobPct) >= 6) {
-      knobPct = pct;
-      lastInteract = t;
-      if (state != AWAKE) wakeUp();
-    }
-  }
-
-  // button: short press pets the robot, hold for one second to show temperature and humidity
-  bool down = digitalRead(BUTTON_PIN) == LOW;
-  if (down && !btnHeld) { btnHeld = true; btnLong = false; btnDown = t; }
-  if (down && btnHeld && !btnLong && t - btnDown > 1000) {
-    btnLong = true;
+  // IR pet sensor: a hand taken away after a short moment pets the robot, a hand held close for one second shows temperature and humidity
+  bool raw = digitalRead(IR_PIN) == LOW;
+  if (raw != irRaw) { irRaw = raw; irChange = t; }
+  if (irRaw != irNow && t - irChange > 60) irNow = irRaw;
+  if (irNow && !handHeld) { handHeld = true; handLong = false; handDown = t; }
+  if (irNow && handHeld && !handLong && t - handDown > 1000) {
+    handLong = true;
     infoUntil = t + 4000;
     lastInteract = t;
     if (state != AWAKE) wakeUp();
   }
-  if (!down && btnHeld) {
-    btnHeld = false;
-    if (!btnLong && t - btnDown > 40) petRobot();
+  if (!irNow && handHeld) {
+    handHeld = false;
+    if (!handLong && t - handDown > 100) petRobot();
   }
 
   // DHT11: read slowly, and only while the head is not turning
@@ -573,8 +512,8 @@ void sensorsRun() {
 #if DEBUG_SENSORS
   if (t - lastSensorPrint > 2000) {
     lastSensorPrint = t;
-    Serial.printf("temp %.1f C | hum %.0f%% | dist %.0f cm | pir %d | volume %d%% | state %d\n",
-                  temp, hum, distCm, pir, knobPct, (int)state);
+    Serial.printf("temp %.1f C | hum %.0f%% | hand %d | pir %d | state %d\n",
+                  temp, hum, (int)irNow, pir, (int)state);
   }
 #endif
 }
@@ -699,16 +638,9 @@ void setup() {
   d.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   d.setTextColor(1); d.setTextSize(1);
 
-  pinMode(TRIG_PIN, OUTPUT);
-  digitalWrite(TRIG_PIN, LOW);
-  pinMode(ECHO_PIN, INPUT);
-  attachInterrupt(digitalPinToInterrupt(ECHO_PIN), onEcho, CHANGE);
   pinMode(PIR_PIN, INPUT);
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(IR_PIN, INPUT);
   dht.begin();
-  knobAvg = analogRead(KNOB_PIN);
-  knobPct = map(knobAvg, 0, 4095, 0, 100);
-  spkVol = 200 + knobPct * 70;
 
   micOut = xStreamBufferCreate(8192, 1);
   spkIn = xStreamBufferCreate(16384, 1);

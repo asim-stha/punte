@@ -59,6 +59,7 @@ export function useBuddy({ S, onLoggedOut }) {
   const [started, setStarted] = useState(false);
   const [mood, setMood] = useState(null);               // the real robot's mood: { expr, state }
   const [head, setHead] = useState({ pan: 0, tilt: 0 }); // head turn shown by the 3D robot on the page
+  const [lastEv, setLastEv] = useState(null);          // newest robot sensor event: { text, at }, shown in the robot status card only
   const [robotCam, setRobotCam] = useState(false);       // is the ESP32-CAM connected to the server
   const [viewing, setViewing] = useState(false);         // is the Camera page open
   const [mem, setMem] = useState({ facts: [], chat: [] });
@@ -116,7 +117,7 @@ export function useBuddy({ S, onLoggedOut }) {
         if ('cam' in j) setRobotCam(!!j.cam);
         if (j.mood) { setMood(j.mood); if (showsFace(live.current.S.sync)) setFace(j.mood.expr); }   // the face on the page copies the robot
         if (j.heard && live.current.S.listenSource === 'robot') A.current.heard(j.heard);   // a sentence the robot's microphone heard
-        if (j.ev && showsFace(live.current.S.sync) && eventText(j.ev)) log(eventText(j.ev));
+        if (j.ev && showsFace(live.current.S.sync) && eventText(j.ev)) setLastEv({ text: eventText(j.ev), at: Date.now() });
       } catch (err) { /* ignore */ }
     };
     w.onclose = () => {
@@ -566,7 +567,7 @@ export function useBuddy({ S, onLoggedOut }) {
 
   return {
     // state
-    robot, robotCam, mood, face, head, badge, messages, who, cam, started, mem, faces, info, listening, holding, ai, models, modelNote,
+    robot, robotCam, lastEv, mood, face, head, badge, messages, who, cam, started, mem, faces, info, listening, holding, ai, models, modelNote,
     videoRef, robotCanvasRef, setViewing,
     // actions
     send, say, route, connect, setCamera, learnFace, deletePerson,
