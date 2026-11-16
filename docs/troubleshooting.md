@@ -2,6 +2,8 @@
 
 Run the commands on the VM inside `punte/docker`.
 
+First look at Settings on the website. The System status card shows which part is down.
+
 ## A container is not healthy
 
 ```
@@ -38,6 +40,12 @@ docker compose logs --tail 50 backend
 - Newer Chrome may ask to allow access to devices on your network when the page talks to Ollama on your computer. Choose Allow.
 - On a computer with a graphics card the default model is `llama3.1:8b`. `ollama ps` should show it as 100% GPU. If it says CPU, the answers are slow: update the graphics driver, restart Ollama and check that the laptop is plugged in.
 - The first answer after a long quiet time is slow because the model has to load again. The server keeps its model for 24 hours (`OLLAMA_KEEP_ALIVE`).
+
+- "The AI on the server is not running": start it with `docker compose --profile server-ai up -d`.
+- "The model ... is not downloaded on the server yet": run `docker compose exec ollama ollama pull <model>` with the name from `OLLAMA_MODEL`.
+- Answers from the server are slow or cut short: `OLLAMA_MAX_TOKENS` in `docker/.env` sets the longest answer (160 is about 120 words). A smaller number is faster.
+- "Too many requests": one user sent more than `CHAT_PER_MIN` questions in a minute. Wait a moment.
+- After every deploy the backend restarts, so everybody has to log in again. The page goes back to the login screen by itself.
 
 ## Robot voice
 

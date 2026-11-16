@@ -24,7 +24,11 @@ function passwordAuth(env) {
     const m = (req.headers.cookie || '').split(';').map(s => s.trim()).find(s => s.startsWith('sid='));
     return m ? m.slice(4) : '';
   };
-  setInterval(() => { const n = Date.now(); for (const [k, v] of sessions) if (v < n) sessions.delete(k); }, 3600e3).unref();
+  setInterval(() => {                                   // forget old logins and old wrong tries
+    const n = Date.now();
+    for (const [k, v] of sessions) if (v < n) sessions.delete(k);
+    for (const [k, t] of tries) if (!t.some(x => n - x < 15 * 60e3)) tries.delete(k);
+  }, 3600e3).unref();
 
   return {
     kind: 'password',

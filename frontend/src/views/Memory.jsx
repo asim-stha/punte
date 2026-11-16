@@ -25,8 +25,9 @@ export default function Memory({ b, hidden }) {
           ))}
         </div>
         <button className="btn" onClick={() => b.addFact(prompt('What should Punte remember?'))}>+ Add information</button>
-
-        <h2 style={{ marginTop: 24 }}>People I know</h2>
+      </div>
+      <div className="card">
+        <h2>People I know</h2>
         <div>
           {list.length === 0 && <div className="empty">No faces learned yet.</div>}
           {list.map(p => (

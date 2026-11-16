@@ -22,6 +22,8 @@ const PANES = [
 const SCREEN_ICON = 'M3 5h18v11H3zM8 20h8M12 16v4';
 const BOT_ICON = 'M5 9h14v10H5zM12 9V5M9 14h.01M15 14h.01';
 const CONTROLS_ICON = 'M4 7h10M18 7h2M4 17h2M10 17h10M16 5v4M8 15v4';
+const SUN_ICON = 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5';
+const MOON_ICON = 'M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z';
 
 export default function App() {
   const [authed, setAuthed] = useState(null);          // null = checking
@@ -85,10 +87,12 @@ function Room({ S, set, theme, setTheme, onLoggedOut }) {
           <button type="button" aria-pressed={robotMode} onClick={() => pick('robot')}><svg viewBox="0 0 24 24"><path d={BOT_ICON} /></svg>Robot</button>
         </div>
         <div className="pills">
-          <span className={'pill' + robotClass}><span className="dot" />{robotText}</span>
+          <span className={'pill bot' + robotClass}><span className="dot" />{robotText}</span>
           <span className="pill seen">Seen <b>{b.who}</b></span>
           <span className={'pill' + (b.badge === 'Idle' ? '' : ' live')}><span className="dot" />{b.badge}</span>
-          <button className="btn sm" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>{theme === 'light' ? 'Dark' : 'Light'}</button>
+          <button className="btn sm themebtn" aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'} title={theme === 'light' ? 'Dark mode' : 'Light mode'} onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
+            <svg viewBox="0 0 24 24"><path d={theme === 'light' ? MOON_ICON : SUN_ICON} /></svg>
+          </button>
           {!b.started && <button className="btn pri sm" onClick={b.connect}>Connect</button>}
         </div>
       </header>

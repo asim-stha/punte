@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import Toggle from '../components/Toggle';
 import AiStatus from '../components/AiStatus';
+import SystemStatus from '../components/SystemStatus';
 
 function useVoices() {
   const [voices, setVoices] = useState([]);
@@ -36,17 +37,18 @@ export default function Settings({ b, S, set, onLogout, hidden }) {
   const localList = [...new Set(['llama3.1:8b', 'llama3.2:3b', ...b.models.filter(m => !/cloud/i.test(m))])];
   return (
     <section className="view g2" hidden={hidden}>
+      <SystemStatus S={S} />
       <div className="card">
-        <span className="tag">{robotMode ? 'Robot mode' : 'Website mode'}</span>
-        <h2>Connection</h2>
+        <div className="cardhead"><h2>Connection</h2><span className="tag">{robotMode ? 'Robot mode' : 'Website mode'}</span></div>
         <div className="line"><span className="mu">Server</span><b>{location.host}</b></div>
         {robotMode && <div className="line"><span className="mu">Robot</span><b>{b.robot === null ? 'Checking...' : b.robot ? 'Online' : 'Offline'}</b></div>}
         <label htmlFor="ai">Who answers questions</label>
         <select id="ai" value={S.aiWhere} onChange={e => set({ aiWhere: e.target.value })}>
-          <option value="auto">Automatic (this computer first, then the server)</option>
-          <option value="local">This computer only (Ollama on this computer)</option>
-          <option value="server">The server only (Ollama on the server)</option>
+          <option value="auto">Automatic (best choice)</option>
+          <option value="local">This computer only</option>
+          <option value="server">The server only</option>
         </select>
+        <p className="hint">{S.aiWhere === 'auto' ? 'Tries Ollama on this computer first, then the server.' : S.aiWhere === 'local' ? 'Only Ollama on this computer answers.' : 'Only Ollama on the server answers.'}</p>
         <AiStatus S={S} b={b} />
         {device ? <>
           <label htmlFor="ol">Ollama on this computer</label>

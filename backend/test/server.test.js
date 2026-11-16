@@ -36,6 +36,7 @@ test.before(async () => {
   voiceServer = http.createServer((req, res) => {   // stands in for the tts container
     let body = ''; req.on('data', d => body += d);
     req.on('end', () => {
+      if (req.url === '/health') return res.end('ok');
       if (JSON.parse(body).text.includes('fail')) { res.statusCode = 500; return res.end('no'); }
       res.end(VOICE_BYTES);
     });
@@ -43,7 +44,7 @@ test.before(async () => {
   await new Promise(r => voiceServer.listen(0, '127.0.0.1', r));
   earsServer = http.createServer((req, res) => {     // stands in for the stt container
     const parts = []; req.on('data', d => parts.push(d));
-    req.on('end', () => { heardByEars.push(Buffer.concat(parts).length); res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ text: 'hello robot' })); });
+    req.on('end', () => { if (req.url === '/health') return res.end('ok'); heardByEars.push(Buffer.concat(parts).length); res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ text: 'hello robot' })); });
   });
   await new Promise(r => earsServer.listen(0, '127.0.0.1', r));
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'punte-srv-'));
@@ -222,6 +223,19 @@ test('speak: needs a login, a text and an online robot', async () => {
   await new Promise(r => setTimeout(r, 100));
   assert.equal((await call('/api/speak', 'POST', { text: 'hi' }, authed())).status, 409);   // no robot connected
   assert.equal((await (await call('/api/status', 'GET', null, authed())).json()).voice, true);
+});
+
+test('system status lists every part and says what is down', async () => {
+  assert.equal((await call('/api/system')).status, 401);
+  const { parts } = await (await call('/api/system', 'GET', null, authed())).json();
+  const by = Object.fromEntries(parts.map(p => [p.id, p]));
+  assert.deepEqual(parts.map(p => p.id), ['proxy', 'frontend', 'backend', 'database', 'tts', 'stt', 'ollama', 'robot', 'camera']);
+  assert.equal(by.database.ok, true);
+  assert.equal(by.tts.ok, true);
+  assert.equal(by.stt.ok, true);
+  assert.equal(by.ollama.ok, false);                   // no ollama in this test
+  assert.equal(by.ollama.optional, true);
+  assert.equal(by.robot.note, 'Offline');
 });
 
 const talkChunks = (esp, bytes) => { for (let i = 0; i < bytes; i += 640) esp.send(Buffer.alloc(Math.min(640, bytes - i), 3)); };

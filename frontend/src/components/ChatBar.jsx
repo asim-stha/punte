@@ -21,7 +21,7 @@ export default function ChatBar({ b, S }) {
         <MicButton b={b} S={S} className="mic">
           <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></svg>
         </MicButton>
-        <input type="text" placeholder="Say something to Punte" aria-label="Type to talk" value={text} onChange={e => setText(e.target.value)} />
+        <input type="text" placeholder="Message Punte" aria-label="Type to talk" value={text} onChange={e => setText(e.target.value)} />
         <button className="send" type="submit">Send</button>
       </form>
     </section>

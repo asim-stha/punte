@@ -48,6 +48,10 @@ services:
       STT_URL: http://stt:5001
       OLLAMA_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-24h}
+      OLLAMA_MAX_TOKENS: ${OLLAMA_MAX_TOKENS:-160}
+      CHAT_PER_MIN: ${CHAT_PER_MIN:-20}
+      SPEAK_PER_MIN: ${SPEAK_PER_MIN:-30}
     depends_on:
       database:
         condition: service_healthy

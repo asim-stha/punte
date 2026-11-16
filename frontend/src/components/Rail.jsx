@@ -129,10 +129,10 @@ export default function Rail({ b, S, set, open, setFast }) {
           <button className="btn sm" onClick={center}>Center</button>
           <button className="btn sm" onClick={() => { const p = hp.pan; play([[p, -12], [p, 12], [p, -12], [p, 12], [p, 0]], 300, 'h'); }}>Nod</button>
           <button className="btn sm" onClick={() => { const t = hp.tilt; play([[-30, t], [30, t], [-30, t], [30, t], [0, t]], 280, 'p'); }}>Shake</button>
-          <button className="btn sm" onClick={() => play([[-40, 0], [40, 0], [-25, 0], [25, 0], [0, 0]], 750, 'p')}>Look around</button>
-          <button className="btn sm" onClick={() => (robotMode ? b.send('r:-45') : turnTo(-45))}>Left 45&deg;</button>
-          <button className="btn sm" onClick={() => (robotMode ? b.send('r:45') : turnTo(45))}>Right 45&deg;</button>
-          <button className="btn sm" onClick={() => (robotMode ? b.send('r:360') : spinWeb())}>Spin 360&deg;</button>
+          <button className="btn sm" onClick={() => play([[-40, 0], [40, 0], [-25, 0], [25, 0], [0, 0]], 750, 'p')} title="Look around">Look</button>
+          <button className="btn sm" onClick={() => (robotMode ? b.send('r:-45') : turnTo(-45))} title="Turn left 45 degrees">Left</button>
+          <button className="btn sm" onClick={() => (robotMode ? b.send('r:45') : turnTo(45))} title="Turn right 45 degrees">Right</button>
+          <button className="btn sm" onClick={() => (robotMode ? b.send('r:360') : spinWeb())} title="Spin all the way around">Spin</button>
           <button className="btn sm" onClick={() => turnTo(180)}>Back</button>
           {robotMode && <button className="btn sm" onClick={() => b.send('c:2')}>Chirp</button>}
         </div>

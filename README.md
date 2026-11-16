@@ -83,3 +83,13 @@ Step by step in [docs/deploy.md](docs/deploy.md). If something is wrong, see [do
 - Real passwords live only in `docker/.env` and `firmware/desktop_body/secrets.h`. The camera has its own `secrets.h` in `firmware/esp32_cam/`. All of them are in `.gitignore`.
 - Faces are stored as 128 numbers, never as photos.
 - The database has no public port. Only the proxy is open to the internet.
+- The proxy adds the security headers (https only, no frames, no type guessing).
+- Login allows 10 wrong tries in 15 minutes. AI questions and robot sentences have a limit per minute (`CHAT_PER_MIN`, `SPEAK_PER_MIN`).
+
+## System status
+
+Open Settings on the website. The first card checks every container, the robot and the camera, and refreshes by itself. A red dot means that part needs attention. A grey dot is an optional part that is off.
+
+## Demo day
+
+The steps for the day of the demo are in `docs/demo-day.md`.

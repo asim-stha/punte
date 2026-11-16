@@ -45,7 +45,7 @@ export function useBuddy({ S, onLoggedOut }) {
     ws: null, closing: false, timer: 0, video: null, stream: null, loop: 0,
     cur: undefined, speaking: false, thinking: false, sayId: 0, awakeUntil: 0,
     lastSeen: 0, greetOK: false, lastGreeted: undefined, lastRec: 0, lastSend: 0,
-    rec: null, ptt: null, listening: false, mutedUntil: 0, waiting: false, lastSaid: '',
+    rec: null, ptt: null, listening: false, mutedUntil: 0, waiting: false, lastSaid: '', voiceNote: false,
     aiState: { downUntil: 0, note: '' },
     rc: null, frameAt: 0, decoding: false, camOn: false, watching: false,
     lastP: 0, lastAct: Date.now(), lastIdle: 0, lastBye: 0
@@ -80,16 +80,19 @@ export function useBuddy({ S, onLoggedOut }) {
       if (typeof e.data !== 'string') return drawFrame(e.data);          // a picture from the robot camera
       try {
         const j = JSON.parse(e.data);
-        if ('esp' in j) { setRobot(!!j.esp); if (!j.esp) setMood(null); }
+        if ('esp' in j) { setRobot(!!j.esp); if (!j.esp) setMood(null); else x.voiceNote = false; }
         if ('cam' in j) setRobotCam(!!j.cam);
         if (j.mood) { setMood(j.mood); if (showsFace(live.current.S.sync)) setFace(j.mood.expr); }   // the face on the page copies the robot
+        if (j.note) log(String(j.note).slice(0, 200));                     // the server explains a problem, for example listening is down
         if (j.heard && live.current.S.listenSource === 'robot') A.current.heard(j.heard);   // a sentence the robot's microphone heard
         if (j.ev && showsFace(live.current.S.sync) && eventText(j.ev)) setLastEv({ text: eventText(j.ev), at: Date.now() });
       } catch (err) { /* ignore */ }
     };
     w.onclose = () => {
       x.ws = null; x.watching = false; setRobot(null); setRobotCam(false);
-      if (!x.closing) x.timer = setTimeout(openWs, 3000);
+      if (x.closing) return;
+      x.timer = setTimeout(openWs, 3000);
+      api('status').then(setInfo).catch(lostLogin);    // after a server restart the login is gone: show the login page again
     };
   }
 
@@ -295,7 +298,7 @@ export function useBuddy({ S, onLoggedOut }) {
   async function connect() {
     if (started) return;
     setStarted(true); x.started = true; x.lastAct = Date.now();
-    try { speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch (e) { /* unlocks speech after a click */ }
+    try { window.speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch (e) { /* unlocks speech after a click */ }
     if (live.current.S.cam) await startCamera();
     else setCam({ on: false, note: 'Camera is off' });
     log('Ready: ' + live.current.faces.length + ' face samples, ' + live.current.mem.facts.length + ' memories');
@@ -308,10 +311,14 @@ export function useBuddy({ S, onLoggedOut }) {
   function say(t, e = 'neutral', url) {
     const id = ++x.sayId, s = live.current.S;
     send('x:' + (EX[e] ?? 0)); msg('bot', t, url); x.lastSaid = norm(t);
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(t);
-    u.rate = s.rate || 1;
-    const v = speechSynthesis.getVoices().find(vv => vv.name === s.voice); if (v) u.voice = v;
+    const synth = window.speechSynthesis;             // some browsers have no voice, then the text is only shown
+    let u = null;
+    if (synth) {
+      synth.cancel();
+      u = new SpeechSynthesisUtterance(t);
+      u.rate = s.rate || 1;
+      const v = synth.getVoices().find(vv => vv.name === s.voice); if (v) u.voice = v;
+    }
     x.speaking = true; refreshBadge(); send('t:1');
     const lv = live.current;
     const done = () => {                              // can only run once per sentence, and never gets stuck
@@ -322,11 +329,16 @@ export function useBuddy({ S, onLoggedOut }) {
       setTimeout(() => send('x:0'), 3000);
     };
     const laptop = () => {                            // the voice of this computer
+      if (!u) return setTimeout(done, 600 + t.length * 60);
       u.onend = done; u.onerror = done;
       setTimeout(done, 3000 + t.length * 90 / (s.rate || 1));
-      speechSynthesis.speak(u);
+      synth.speak(u);
     };
     const place = s.voicePlace || 'both';             // 'laptop' | 'robot' | 'both'
+    if (place !== 'laptop' && controlsRobot(s.sync) && !x.voiceNote && (!lv.info.voice || !lv.robot)) {   // said once, not for every sentence
+      x.voiceNote = true;
+      log(!lv.info.voice ? 'The robot voice is off on the server, so this computer speaks.' : 'The robot is offline, so this computer speaks.');
+    }
     if (place === 'laptop' || !lv.info.voice || !lv.robot || !controlsRobot(s.sync)) return laptop();
     // the robot's own speaker: the server makes the audio and streams it to the robot
     setTimeout(done, 25000);                          // never stays stuck if the server does not answer
@@ -359,6 +371,7 @@ export function useBuddy({ S, onLoggedOut }) {
   }
 
   async function ask(text) {
+    if (x.thinking) return log('One moment, I am still thinking about the last question.');   // one question at a time, so answers do not mix
     const { S: s, mem: m } = live.current;
     const chat = [...m.chat, { role: 'user', content: ((x.cur ? x.cur + ': ' : '') + text).slice(0, 1500) }].slice(-12);
     send('x:7'); x.thinking = true; refreshBadge();
@@ -371,7 +384,7 @@ export function useBuddy({ S, onLoggedOut }) {
       x.thinking = false; say(r.text, r.tag);
     } catch (e) {
       if (!lostLogin(e)) log('AI error: ' + e.message);
-      send('x:2');
+      send('x:2'); setTimeout(() => send('x:0'), 4000);   // sad for a moment, then normal again
     } finally { x.thinking = false; refreshBadge(); }
   }
 
@@ -484,7 +497,7 @@ export function useBuddy({ S, onLoggedOut }) {
       setListening(true); sendListen();
       return log('Listening with the robot - say the wake name first' + (live.current.S.mode === 'always' ? '' : ' (' + live.current.S.wake + ')'));
     }
-    if (!SR) return alert('Use Chrome');
+    if (!SR) return log('This browser cannot listen. Use Chrome or Edge, or type your message.');
     if (live.current.S.mode === 'push') return log('Push-to-talk mode: hold the microphone button or the Space key.');
     if (x.listening) stopListening(); else { startListening(); log('Listening - mode: ' + live.current.S.mode); }
   }
@@ -492,8 +505,8 @@ export function useBuddy({ S, onLoggedOut }) {
   function pttStart() {                               // push-to-talk: the microphone is on only while held
     const s = live.current.S;
     if (s.mode !== 'push' || s.listenSource === 'robot' || !s.mic || x.ptt) return;
-    if (!SR) return alert('Use Chrome');
-    speechSynthesis.cancel();
+    if (!SR) return log('This browser cannot listen. Use Chrome or Edge, or type your message.');
+    try { window.speechSynthesis.cancel(); } catch (e) { /* no voice in this browser */ }
     const r = makeRec(false, t => A.current.route(t));
     r.onend = () => { x.ptt = null; setHolding(false); };
     x.ptt = r; setHolding(true);

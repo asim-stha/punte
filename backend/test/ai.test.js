@@ -13,6 +13,7 @@ function fakeOllama() {
       const b = JSON.parse(body || '{}');
       seen.push({ url: req.url, body: b });
       res.setHeader('Content-Type', 'application/json');
+      if (req.url === '/api/tags') return res.end(JSON.stringify({ models: [{ name: 'llama3.2:3b' }] }));
       if (b.model === 'missing') { res.statusCode = 404; return res.end(JSON.stringify({ error: 'model not found' })); }
       res.end(JSON.stringify(b.messages.length ? { message: { content: 'hello from fake' } } : { done: true }));
     });
@@ -42,7 +43,7 @@ test('keep alive is 30 minutes when nothing is set', async () => {
 test('an Ollama error comes back as a readable message', async () => {
   const f = await fakeOllama();
   const ai = createAi({ OLLAMA_URL: f.url, OLLAMA_MODEL: 'missing' });
-  await assert.rejects(ai.chat([{ role: 'user', content: 'hi' }]), /model not found/);
+  await assert.rejects(ai.chat([{ role: 'user', content: 'hi' }]), /The model missing is not downloaded on the server yet/);
   f.server.close();
 });
 
@@ -54,5 +55,24 @@ test('warm loads the model with no messages, and says false when Ollama is off',
   f.server.close();
   const off = createAi({ OLLAMA_URL: 'http://127.0.0.1:1' });
   assert.equal(await off.warm(), false);
-  await assert.rejects(off.chat([{ role: 'user', content: 'hi' }]), /Cannot reach Ollama/);
+  await assert.rejects(off.chat([{ role: 'user', content: 'hi' }]), /The AI on the server is not running/);
+});
+
+test('answers have a length limit, so they come back fast', async () => {
+  const f = await fakeOllama();
+  await createAi({ OLLAMA_URL: f.url }).chat([{ role: 'user', content: 'hi' }]);
+  assert.equal(f.seen[0].body.options.num_predict, 160);
+  await createAi({ OLLAMA_URL: f.url, OLLAMA_MAX_TOKENS: '80' }).chat([{ role: 'user', content: 'hi' }]);
+  assert.equal(f.seen[1].body.options.num_predict, 80);
+  f.server.close();
+});
+
+test('health says if Ollama is there and has the model', async () => {
+  const f = await fakeOllama();
+  assert.deepEqual(await createAi({ OLLAMA_URL: f.url }).health(), { ok: true, note: 'llama3.2:3b' });
+  const other = await createAi({ OLLAMA_URL: f.url, OLLAMA_MODEL: 'llama3.2:1b' }).health();
+  assert.equal(other.ok, false);
+  assert.match(other.note, /not downloaded/);
+  f.server.close();
+  assert.equal((await createAi({ OLLAMA_URL: 'http://127.0.0.1:1' }).health()).ok, false);
 });

@@ -46,6 +46,10 @@ try {
 const sha = s => crypto.createHash('sha256').update(String(s)).digest();
 const same = (a, b) => crypto.timingSafeEqual(sha(a), sha(b));
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+const upFor = () => {                                  // how long the backend has been running, in words
+  const m = Math.floor(process.uptime() / 60);
+  return m < 60 ? m + ' min' : m < 2880 ? Math.floor(m / 60) + ' h' : Math.floor(m / 1440) + ' days';
+};
 
 // web app
 const app = express();
@@ -83,6 +87,23 @@ app.use('/api', wrap(async (req, res, next) => {
 }));
 
 app.get('/api/status', (req, res) => res.json({ esp: esps.size > 0, cam: cams.size > 0, model: ai.model, storage: storage.kind, voice: tts.enabled, ears: stt.enabled }));
+
+// the status page: asks every part if it works right now
+app.get('/api/system', wrap(async (req, res) => {
+  const db = storage.ping().then(() => ({ ok: true, note: 'Ready' }), () => ({ ok: false, note: 'Not answering' }));
+  const [database, voice, ears, model] = await Promise.all([db, tts.health(), stt.health(), ai.health ? ai.health() : { ok: false, note: 'No check' }]);
+  res.json({ parts: [
+    { id: 'proxy', name: 'Proxy', job: 'Brings visitors in over https', ok: true, note: 'Ready' },
+    { id: 'frontend', name: 'Frontend', job: 'The website', ok: true, note: 'Ready' },
+    { id: 'backend', name: 'Backend', job: 'Login, robot link and saving', ok: true, note: 'Up for ' + upFor() },
+    { id: 'database', name: 'Database', job: 'Memory and faces', ...database },
+    { id: 'tts', name: 'Voice (tts)', job: 'The robot speaks', ...voice },
+    { id: 'stt', name: 'Listening (stt)', job: 'The robot hears', ...ears },
+    { id: 'ollama', name: 'Server AI (ollama)', job: 'Answers for phones', optional: true, ...model },
+    { id: 'robot', name: 'Robot', job: 'The ESP32 body', optional: true, ok: esps.size > 0, note: esps.size > 0 ? 'Connected' : 'Offline' },
+    { id: 'camera', name: 'Robot camera', job: 'The ESP32-CAM', optional: true, ok: cams.size > 0, note: cams.size > 0 ? 'Connected' : 'Offline' }
+  ] });
+}));
 
 // the robot speaks: text -> audio (voice container) -> robot, at the speed the speaker plays it
 app.post('/api/speak', limit(SPEAK_PER_MIN), wrap(async (req, res) => {
@@ -160,7 +181,7 @@ function playToRobots(pcm) {
 
 // The robot's microphone: the robot sends audio while someone speaks. A pause ends the sentence, the stt container turns it into text,
 // and the text goes to the browsers that chose "listen with the robot".
-let heardChunks = [], heardBytes = 0, heardTimer = null, waiting = 0;
+let heardChunks = [], heardBytes = 0, heardTimer = null, waiting = 0, earsNoteAt = 0;
 const listeners = () => { let n = 0; for (const b of browsers) if (b.listening) n++; return n; };
 const tellEars = () => tell(esps, stt.enabled && listeners() > 0 ? 'a:1' : 'a:0');   // the robot streams only when someone listens
 function micChunk(buf) {
@@ -181,6 +202,10 @@ async function endSentence() {
     if (text) for (const b of browsers) if (b.listening && b.readyState === 1) b.send(JSON.stringify({ heard: text }));
   } catch (e) {
     console.error('listening failed:', e.message);
+    if (Date.now() - earsNoteAt > 30000) {               // tell the website, but not again and again
+      earsNoteAt = Date.now();
+      for (const b of browsers) if (b.listening && b.readyState === 1) b.send(JSON.stringify({ note: 'The robot heard something, but ' + e.message + '.' }));
+    }
   } finally { waiting--; }
 }
 
@@ -253,7 +278,13 @@ setInterval(() => {                                    // remove dead connection
 }, 30000).unref();
 
 server.listen(PORT, () => console.log(`Punte cloud on port ${PORT} (login: ${auth.kind}, storage: ${storage.kind}, AI: ${ai.name} ${ai.model})`));
-if (ai.warm) ai.warm().then(ok => console.log(ok ? `AI model ${ai.model} is loaded` : 'AI on the server is not running (optional container)'));
+// load the ai model now, and check again every 5 minutes, so it is ready again after the ollama container restarts
+let aiReady = null;
+const warmAi = () => ai.warm().then(ok => {
+  if (ok !== aiReady) console.log(ok ? `AI model ${ai.model} is loaded` : 'AI on the server is not running (optional container)');
+  aiReady = ok;
+});
+if (ai.warm) { warmAi(); setInterval(warmAi, 5 * 60e3).unref(); }
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, async () => {   // docker stop: close the database connection first
   server.close();
   try { await storage.close?.(); } catch (e) { /* closing anyway */ }
