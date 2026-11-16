@@ -15,6 +15,7 @@ const crypto = require('crypto');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 const check = require('./lib/validate');
+const limit = require('./lib/limit');
 
 const PORT = +process.env.PORT || 3000;
 const ESP_TOKEN = process.env.ESP_TOKEN || '';
@@ -25,6 +26,8 @@ const GAP_MS = 700;                                    // this much quiet from t
 const MIN_SENTENCE = 12800;                            // 0.4 seconds of audio, shorter is only noise
 const MAX_SENTENCE = 480000;                           // 15 seconds
 const MAX_FRAME = 100 * 1024;                           // biggest picture we accept (bytes)
+const CHAT_PER_MIN = +process.env.CHAT_PER_MIN || 20;   // ai questions per minute for one user
+const SPEAK_PER_MIN = +process.env.SPEAK_PER_MIN || 30; // robot sentences per minute for one user
 
 let auth, storage, ai, tts, stt;
 try {
@@ -82,7 +85,7 @@ app.use('/api', wrap(async (req, res, next) => {
 app.get('/api/status', (req, res) => res.json({ esp: esps.size > 0, cam: cams.size > 0, model: ai.model, storage: storage.kind, voice: tts.enabled, ears: stt.enabled }));
 
 // the robot speaks: text -> audio (voice container) -> robot, at the speed the speaker plays it
-app.post('/api/speak', wrap(async (req, res) => {
+app.post('/api/speak', limit(SPEAK_PER_MIN), wrap(async (req, res) => {
   const text = typeof req.body?.text === 'string' ? req.body.text.trim().slice(0, 400) : '';
   if (!text) return res.status(400).json({ error: 'text needed' });
   if (!tts.enabled) return res.status(503).json({ error: 'voice engine is off' });
@@ -110,7 +113,7 @@ app.put('/api/mem', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
-app.post('/api/chat', wrap(async (req, res) => {
+app.post('/api/chat', limit(CHAT_PER_MIN), wrap(async (req, res) => {
   if (!check.messages(req.body?.messages)) return res.status(400).json({ error: 'bad messages' });
   try {
     res.json({ message: { content: await ai.chat(req.body.messages) } });

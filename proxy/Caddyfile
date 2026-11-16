@@ -3,6 +3,24 @@
 {$DOMAIN} {
 	encode gzip
 
+	# security headers on every answer
+	header {
+		# browsers use https only for this site for one year
+		Strict-Transport-Security "max-age=31536000"
+		# the browser must not guess file types
+		X-Content-Type-Options "nosniff"
+		# other sites cannot show our pages inside a frame
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		# only our own site may use the camera and the microphone
+		Permissions-Policy "camera=(self), microphone=(self), geolocation=()"
+		# no frames, plugins or forms that send data to other sites
+		Content-Security-Policy "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
+		# do not tell visitors which server program we use
+		-Server
+		defer
+	}
+
 	# api, websockets, face library and health check go to the backend
 	@backend path /api/* /ws /esp /cam /vendor/* /healthz
 	handle @backend {
