@@ -2,6 +2,7 @@
 // The views only show what this hook returns.
 import { useEffect, useRef, useState } from 'react';
 import { api, AuthError } from '../api';
+import { askAi } from '../lib/ai';
 import { EX, robotCommand, openCommand, smallTalk, greeting, farewell, idleAction, controlsRobot, showsFace, eventText, wakeNames, wakeSplit, systemPrompt, parseReply, keepFacts } from '../lib/commands';
 
 const MODELS = '/vendor/face-api/model/';
@@ -11,40 +12,6 @@ const GAIN = 35;   // degrees of head turn for a face at the edge of the picture
 const SIGN = 1;    // change to -1 if the head turns away from your face
 const norm = s => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 const HELLO = { cls: 'bot', text: "Hi! I'm Punte. Type a message or tap the microphone to talk." };
-
-class AiError extends Error {
-  constructor(message, status) { super(message); this.status = status; }
-}
-
-const CLOUD_WAIT = 15000;     // how long to wait for the cloud model before using the local one
-const CLOUD_PAUSE = 120000;   // after a network problem, leave the cloud alone for this long
-const LIMIT_WORDS = /limit|quota|usage|credit|upgrade|subscription|sign ?in|unauthorized/i;
-
-// browser -> Ollama on this same computer (cloud models are reached through the same Ollama)
-async function ollamaChat(base, model, messages, waitMs, extra = {}) {
-  const url = base.replace(/\/$/, '') + '/api/chat';
-  const call = async body => {
-    let r;
-    try {
-      r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(waitMs), body: JSON.stringify(body) });
-    } catch (e) {
-      throw new AiError(e.name === 'TimeoutError' ? 'no answer after ' + Math.round(waitMs / 1000) + ' seconds'
-        : 'cannot reach Ollama: ' + e.message + ' (is Ollama running, and does OLLAMA_ORIGINS allow this site?)');
-    }
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || !j.message) throw new AiError(j.error || 'Ollama HTTP ' + r.status, r.status);
-    return j.message.content || '';
-  };
-  try {
-    return await call({ model, stream: false, messages, ...extra });
-  } catch (e) {
-    if (extra.think === false && /think/i.test(e.message)) {          // this model has no thinking switch: ask again without it
-      const { think, ...rest } = extra;
-      return call({ model, stream: false, messages, ...rest });
-    }
-    throw e;
-  }
-}
 
 // Some models put their reasoning in <think> tags. It should never be spoken.
 const noThinking = raw => String(raw).replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^[\s\S]*<\/think>/i, '').trim();
@@ -67,7 +34,7 @@ export function useBuddy({ S, onLoggedOut }) {
   const [info, setInfo] = useState({ model: '', storage: '' });
   const [listening, setListeningState] = useState(false);
   const [holding, setHolding] = useState(false);
-  const [ai, setAi] = useState({ active: '', cloudOff: '' });   // active: 'cloud' | 'local' | ''; cloudOff: '' | 'session' | 'pause'
+  const [ai, setAi] = useState({ active: '' });             // which AI gave the last answer: 'device' (this computer) | 'server' | ''
   const [models, setModels] = useState([]);                    // models installed in Ollama
   const [modelNote, setModelNote] = useState('');
 
@@ -79,7 +46,7 @@ export function useBuddy({ S, onLoggedOut }) {
     cur: undefined, speaking: false, thinking: false, sayId: 0, awakeUntil: 0,
     lastSeen: 0, greetOK: false, lastGreeted: undefined, lastRec: 0, lastSend: 0,
     rec: null, ptt: null, listening: false, mutedUntil: 0, waiting: false, lastSaid: '',
-    cloudDead: false, cloudPause: 0,
+    aiState: { downUntil: 0, note: '' },
     rc: null, frameAt: 0, decoding: false, camOn: false, watching: false,
     lastP: 0, lastAct: Date.now(), lastIdle: 0, lastBye: 0
   }).current;
@@ -185,9 +152,8 @@ export function useBuddy({ S, onLoggedOut }) {
   }, []);
 
   useEffect(() => {                                   // a new AI choice gets a fresh start
-    x.cloudDead = false; x.cloudPause = 0;
-    setAi(p => ({ ...p, cloudOff: '' }));
-  }, [S.aiSource, S.aiMode, S.cloudModel, S.ol]);
+    x.aiState.downUntil = 0; x.aiState.note = '';
+  }, [S.aiWhere, S.localModel, S.ol]);
 
   useEffect(() => { if (x.listening) stopListening(); }, [S.mode, S.mic, S.listenSource]);   // changing the voice mode turns the microphone off
   useEffect(() => { refreshBadge(); }, [listening, holding]);
@@ -410,47 +376,23 @@ export function useBuddy({ S, onLoggedOut }) {
   }
 
   // ---------- which AI answers ----------
-  function cloudFailed(e) {
-    // An error answer from Ollama (sign-in, limit, unknown model) will not fix itself, so the cloud stays off for this session.
-    // A network problem or a slow answer may pass, so the cloud only rests for a while.
-    if ((e.status && e.status < 500) || LIMIT_WORDS.test(e.message)) x.cloudDead = true;
-    else x.cloudPause = Date.now() + CLOUD_PAUSE;
-  }
-  const cloudState = () => x.cloudDead ? 'session' : Date.now() < x.cloudPause ? 'pause' : '';
+  // "Auto" asks Ollama on this computer first and the server second, so the same page works on a laptop and on a phone.
+  const isPhone = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
 
   async function askModel(s, messages) {
-    if (s.aiSource !== 'local') return (await api('chat', 'POST', { messages })).message.content;
-    const mode = s.aiMode || 'auto';
-    if (mode === 'cloud') {
-      const out = await ollamaChat(s.ol, s.cloudModel, messages, 60000);
-      setAi(p => ({ ...p, active: 'cloud' }));
-      return out;
-    }
-    if (mode === 'auto' && !x.cloudDead && Date.now() >= x.cloudPause) {
-      try {
-        const out = await ollamaChat(s.ol, s.cloudModel, messages, CLOUD_WAIT);
-        setAi({ active: 'cloud', cloudOff: '' });
-        return out;
-      } catch (e) {
-        cloudFailed(e);
-        log('The cloud AI did not answer (' + e.message + '). Using ' + s.localModel + (x.cloudDead ? ' for the rest of this session.' : ' for now.'));
-      }
-    }
-    const out = await ollamaChat(s.ol, s.localModel, messages, 120000, { think: false, keep_alive: '30m' });
-    setAi({ active: 'local', cloudOff: mode === 'auto' ? cloudState() : '' });
-    return out;
+    const out = await askAi({
+      where: s.aiWhere, base: s.ol, model: s.localModel, messages, state: x.aiState, skipDevice: isPhone,
+      serverChat: async m => (await api('chat', 'POST', { messages: m })).message.content
+    });
+    if (out.source === 'server' && s.aiWhere === 'auto' && !isPhone && x.aiState.note) log('Ollama on this computer did not answer (' + x.aiState.note + '). The server answers instead.');
+    setAi({ active: out.source });
+    return out.text;
   }
 
-  function retryCloud() {
-    x.cloudDead = false; x.cloudPause = 0;
-    setAi(p => ({ ...p, cloudOff: '' }));
-    log('The cloud AI will be tried again.');
-  }
-
-  // Loads the local model into memory, so the first backup answer is not slow.
+  // Loads the model into memory on this computer, so the first answer is not slow.
   async function warmLocal() {
     const s = live.current.S;
-    if (s.aiSource !== 'local' || s.aiMode === 'cloud') return;
+    if (s.aiWhere === 'server' || (s.aiWhere === 'auto' && isPhone)) return;
     try {
       const r = await fetch(s.ol.replace(/\/$/, '') + '/api/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(120000),
@@ -458,12 +400,16 @@ export function useBuddy({ S, onLoggedOut }) {
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status);
-      log('Local AI ready: ' + s.localModel);
-    } catch (e) { log('Local AI is not ready (' + s.localModel + '): ' + e.message); }
+      log('AI on this computer is ready: ' + s.localModel);
+    } catch (e) {
+      if (s.aiWhere === 'local') log('AI on this computer is not ready (' + s.localModel + '): ' + e.message);
+      else log('No Ollama on this computer, so the server will answer.');
+    }
   }
 
   async function refreshModels() {
     const s = live.current.S;
+    if (s.aiWhere === 'server' || (s.aiWhere === 'auto' && isPhone)) return;
     try {
       const r = await fetch(s.ol.replace(/\/$/, '') + '/api/tags', { signal: AbortSignal.timeout(5000) });
       const j = await r.json();
@@ -571,6 +517,6 @@ export function useBuddy({ S, onLoggedOut }) {
     videoRef, robotCanvasRef, setViewing,
     // actions
     send, say, route, connect, setCamera, learnFace, deletePerson,
-    toggleListening, pttStart, pttStop, addFact, deleteFact, clearChat, clearAllMemory, retryCloud, refreshModels
+    toggleListening, pttStart, pttStop, addFact, deleteFact, clearChat, clearAllMemory, refreshModels
   };
 }

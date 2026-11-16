@@ -41,6 +41,10 @@ ESP32-CAM  --wss--> proxy --> backend      (pictures go to the website, only whi
 
 An optional seventh container, `ollama`, can run the AI on the server (`--profile server-ai`).
 
+## Where the AI runs
+
+Punte uses only local models (no cloud account, no usage limit). In Settings, "Who answers questions" is `Automatic` by default: the website asks Ollama on the same computer first (`llama3.1:8b`, fast on a computer with a graphics card) and uses the server's `ollama` container (`llama3.2:3b`) when there is none, for example on a phone. Details are in [docs/troubleshooting.md](docs/troubleshooting.md).
+
 ## Folders
 
 - `frontend/` React website (Vite)

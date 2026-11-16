@@ -29,20 +29,30 @@ docker compose logs --tail 50 backend
 - The ESP32 needs 2.4 GHz WiFi (not 5 GHz).
 - `docker compose logs backend` shows a line when the robot connects or is rejected.
 
+## AI answers
+
+- In Settings, "Who answers questions" has three choices. "Automatic" asks Ollama on this computer first and the server second, so it works on a laptop and on a phone. "This computer only" and "The server only" use just one.
+- Phones and other devices have no Ollama of their own, so they use the server. Start it on the VM with `docker compose --profile server-ai up -d`, then load the model once with `docker compose exec ollama ollama pull llama3.2:3b` (the same name as `OLLAMA_MODEL` in `docker/.env`). `docker compose ps` should show `ollama` healthy.
+- "Cannot reach Ollama at http://ollama:11434": the `ollama` container is not running. Start it with the command above.
+- "cannot reach Ollama ... OLLAMA_ORIGINS" with "This computer only": Ollama is not running on this device, or it does not allow this website. Set the `OLLAMA_ORIGINS` environment variable to this site's address (or `*`) and restart Ollama. A phone cannot use "This computer only".
+- Newer Chrome may ask to allow access to devices on your network when the page talks to Ollama on your computer. Choose Allow.
+- On a computer with a graphics card the default model is `llama3.1:8b`. `ollama ps` should show it as 100% GPU. If it says CPU, the answers are slow: update the graphics driver, restart Ollama and check that the laptop is plugged in.
+- The first answer after a long quiet time is slow because the model has to load again. The server keeps its model for 24 hours (`OLLAMA_KEEP_ALIVE`).
+
 ## Robot voice
 
 - The robot stays silent: in Settings, "Where Punte talks" must be "Robot speaker" or "Robot speaker and this computer", and the robot must be online. The chat log shows "Robot voice did not work" with the reason.
 - "voice engine is off": the `tts` container is not running. `docker compose ps` should show it healthy, and `docker compose logs tts` shows "voice ready".
 - The first build of `tts` downloads the voice (about 60 MB), so it takes a few minutes.
 - The voice sounds choppy: the robot's WiFi is weak. Move it closer to the router or hotspot.
-- The voice is too quiet or too loud: use the volume knob on the robot.
+- The voice is too quiet or too loud: change `spkVol` in `desktop_body.ino` (3500 is medium) and upload again.
 
 ## Robot microphone
 
 - In Settings, "Listen with" must be "The robot's microphone", and the robot must be online. Press the microphone button on the Home page. The chat log shows `Ignored: ...` for sentences without the wake name, so you can see it hears you.
 - Nothing is heard: `docker compose logs stt` should show "model ready", and `docker compose ps` should show `stt` healthy. The first build downloads the model (about 150 MB).
 - It hears you badly: speak within 1 to 2 meters of the robot. Raise `MIC_GAIN` in `desktop_body.ino` (for example 12) and upload again.
-- It answers itself: the robot mic hears its own speaker. The server and the robot both mute the mic while it talks. Turn the volume knob down a little if it still happens.
+- It answers itself: the robot mic hears its own speaker. The server and the robot both mute the mic while it talks. Lower `spkVol` in `desktop_body.ino` a little if it still happens.
 - It is slow: the first sentence after a quiet time takes longer. Put `STT_MODEL=tiny.en` in `docker/.env` and run `bash infra/deploy.sh` again for a faster, less accurate model.
 
 ## Camera

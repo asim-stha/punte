@@ -14,11 +14,9 @@ export const DEFAULTS = {
   idle: true,         // do small fun things when it is quiet
   rate: 1, voice: '',
   voicePlace: 'both', // where Punte talks: 'laptop' | 'robot' | 'both'
-  aiSource: 'local',  // 'local' = this browser asks Ollama on this computer, 'server' = the server asks Ollama
-  ol: 'http://localhost:11434',
-  aiMode: 'auto',     // 'auto' = cloud first with the local model as backup, 'cloud' = cloud only, 'local' = local only
-  cloudModel: 'gemma4:31b-cloud',
-  localModel: 'llama3.1:8b',
+  aiWhere: 'auto',    // who answers: 'auto' = Ollama on this computer first, then the server | 'local' = only this computer | 'server' = only the server
+  ol: 'http://localhost:11434',   // Ollama on this computer
+  localModel: 'llama3.1:8b',      // the model used on this computer
   listenSource: 'laptop', // 'laptop' = the microphone of this computer, 'robot' = the robot's microphone
   mode: 'wake',       // 'wake' | 'push' | 'always'
   wake: 'punte, buddy',

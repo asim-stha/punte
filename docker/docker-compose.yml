@@ -108,9 +108,16 @@ services:
     image: ollama/ollama:latest
     profiles: ["server-ai"]
     restart: unless-stopped
+    environment:
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-24h}     # the model stays in memory, so the first question is not slow
     volumes:
       - ollama-models:/root/.ollama
     networks: [public]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
   public: {}

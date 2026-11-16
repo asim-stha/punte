@@ -250,6 +250,7 @@ setInterval(() => {                                    // remove dead connection
 }, 30000).unref();
 
 server.listen(PORT, () => console.log(`Punte cloud on port ${PORT} (login: ${auth.kind}, storage: ${storage.kind}, AI: ${ai.name} ${ai.model})`));
+if (ai.warm) ai.warm().then(ok => console.log(ok ? `AI model ${ai.model} is loaded` : 'AI on the server is not running (optional container)'));
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, async () => {   // docker stop: close the database connection first
   server.close();
   try { await storage.close?.(); } catch (e) { /* closing anyway */ }

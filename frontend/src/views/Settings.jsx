@@ -1,7 +1,7 @@
 // settings page: connection, voice, privacy and memory (saved in the browser)
 import { useEffect, useState } from 'react';
 import Toggle from '../components/Toggle';
-import ModePicker from '../components/ModePicker';
+import AiStatus from '../components/AiStatus';
 
 function useVoices() {
   const [voices, setVoices] = useState([]);
@@ -31,10 +31,9 @@ function ModelPick({ id, label, value, options, onChange }) {
 
 export default function Settings({ b, S, set, onLogout, hidden }) {
   const voices = useVoices();
-  const local = S.aiSource === 'local';
+  const device = S.aiWhere !== 'server';
   const robotMode = S.appMode === 'robot';
-  const cloudList = [...new Set(['gemma4:31b-cloud', ...b.models.filter(m => /cloud/i.test(m))])];
-  const localList = [...new Set(['llama3.1:8b', 'qwen3.5:4b', 'llama3.2:3b', ...b.models.filter(m => !/cloud/i.test(m))])];
+  const localList = [...new Set(['llama3.1:8b', 'llama3.2:3b', ...b.models.filter(m => !/cloud/i.test(m))])];
   return (
     <section className="view g2" hidden={hidden}>
       <div className="card">
@@ -43,21 +42,21 @@ export default function Settings({ b, S, set, onLogout, hidden }) {
         <div className="line"><span className="mu">Server</span><b>{location.host}</b></div>
         {robotMode && <div className="line"><span className="mu">Robot</span><b>{b.robot === null ? 'Checking...' : b.robot ? 'Online' : 'Offline'}</b></div>}
         <label htmlFor="ai">Who answers questions</label>
-        <select id="ai" value={S.aiSource} onChange={e => set({ aiSource: e.target.value })}>
-          <option value="server">The server (Ollama on the server)</option>
-          <option value="local">This computer (Ollama on this computer)</option>
+        <select id="ai" value={S.aiWhere} onChange={e => set({ aiWhere: e.target.value })}>
+          <option value="auto">Automatic (this computer first, then the server)</option>
+          <option value="local">This computer only (Ollama on this computer)</option>
+          <option value="server">The server only (Ollama on the server)</option>
         </select>
-        {local ? <>
-          <label htmlFor="ol">Ollama endpoint</label>
+        <AiStatus S={S} b={b} />
+        {device ? <>
+          <label htmlFor="ol">Ollama on this computer</label>
           <input type="text" id="ol" value={S.ol} onChange={e => set({ ol: e.target.value.trim() })} />
-          <div className="mu" style={{ margin: '14px 0 8px' }}>Which AI answers</div>
-          <ModePicker S={S} set={set} b={b} />
-          <ModelPick id="cm" label="Cloud model" value={S.cloudModel} options={cloudList} onChange={v => set({ cloudModel: v })} />
-          <ModelPick id="lm" label="Local model (backup)" value={S.localModel} options={localList} onChange={v => set({ localModel: v })} />
+          <ModelPick id="lm" label="AI model on this computer" value={S.localModel} options={localList} onChange={v => set({ localModel: v })} />
           <div className="row" style={{ marginTop: 12 }}><button className="btn" onClick={b.refreshModels}>Refresh model list</button></div>
           {b.modelNote && <p className="mu" style={{ fontSize: 13 }}>{b.modelNote}</p>}
-          <p className="mu" style={{ fontSize: 13 }}>Ollama must allow this website: set OLLAMA_ORIGINS to this site's address, then restart Ollama.</p>
-        </> : <div className="line"><span className="mu">AI model</span><b>{b.info.model || '-'}</b></div>}
+          <p className="mu" style={{ fontSize: 13 }}>Ollama must allow this website: set OLLAMA_ORIGINS to this site's address, then restart Ollama. Phones use the server.</p>
+        </> : null}
+        <div className="line"><span className="mu">AI model on the server</span><b>{b.info.model || '-'}</b></div>
       </div>
 
       <div className="card">

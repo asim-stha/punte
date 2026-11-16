@@ -1,6 +1,6 @@
 // chat history panel: the whole conversation and quick things to say (typing is in the bar at the bottom)
 import { useEffect, useRef } from 'react';
-import ModePicker from '../components/ModePicker';
+import AiStatus from '../components/AiStatus';
 
 const SUGGESTIONS = ['Say hello', 'Play some music', 'Look left', 'Spin around', 'Play music on YouTube'];
 
@@ -12,7 +12,7 @@ export default function Chat({ b, S, set, hidden }) {
     <section className="view" hidden={hidden}>
       <div className="card">
         <h2>Conversation</h2>
-        <ModePicker S={S} set={set} b={b} />
+        <AiStatus S={S} b={b} />
         <div id="log" ref={logRef}>
           {b.messages.map((m, i) => (
             <div key={i} className={'m ' + m.cls}>

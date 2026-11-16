@@ -4,10 +4,9 @@ import MicButton from '../components/MicButton';
 import { NAMES, ROBOT_STATES } from '../lib/commands';
 
 const modelText = (S, b) => {
-  if (S.aiSource !== 'local') return b.info.model;
-  if (S.aiMode === 'cloud') return S.cloudModel;
-  if (S.aiMode === 'local') return S.localModel;
-  return S.cloudModel + ' (backup: ' + S.localModel + ')';
+  if (S.aiWhere === 'server') return b.info.model;
+  if (S.aiWhere === 'local') return S.localModel;
+  return S.localModel + ' (backup: server ' + (b.info.model || '-') + ')';
 };
 
 export default function Home({ b, S, hidden }) {
@@ -45,7 +44,7 @@ export default function Home({ b, S, hidden }) {
         </div>
         <div className="line"><span className="mu">Robot</span><b>{b.robot === null ? '-' : b.robot ? 'Online' : 'Offline'}</b></div>
         <div className="line"><span className="mu">Robot mood</span><b>{b.mood ? NAMES[b.mood.expr] + ', ' + ROBOT_STATES[b.mood.state] : '-'}</b></div>
-        <div className="line"><span className="mu">AI</span><b>{S.aiSource === 'local' ? 'This computer' : 'Server'}</b></div>
+        <div className="line"><span className="mu">AI</span><b>{b.ai.active === 'device' ? 'This computer' : b.ai.active === 'server' ? 'Server' : S.aiWhere === 'server' ? 'Server' : S.aiWhere === 'local' ? 'This computer' : 'Automatic'}</b></div>
         <div className="line"><span className="mu">AI model</span><b>{modelText(S, b)}</b></div>
       </div>
     </section>
