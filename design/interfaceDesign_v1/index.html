@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Punte Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="app">
+<aside class="side"><a class="logo" href="#" id="logo" aria-label="Punte, go to Home"><span class="lm"><i></i><i></i></span>Punte</a><div id="nav" style="display:contents"></div><div class="sp"></div><div class="mu sfoot" style="font-size:12px;padding:0 14px 8px">Your AI desktop buddy</div>
+<button class="nv sfoot" id="theme" aria-label="Switch light or dark theme">Light / Dark</button></aside>
+<div class="main">
+<header class="top"><div><h1 id="title">Home</h1><div class="mu" id="sub" style="font-size:13px"></div></div>
+<div class="stat"><span class="pill" id="conn"><span class="dot"></span><span id="connt">Not connected</span></span>
+<span class="pill">Seen: <b id="who">-</b></span>
+<span class="pill" id="badge"><span class="dot"></span><span id="badget">Idle</span></span>
+<span class="addr" id="addr"></span>
+<button class="btn pri" id="go" style="min-height:38px">Connect</button></div></header>
+
+<section class="view g2" id="v-home">
+ <div class="card hero span"><div><div class="kick">AI desktop buddy</div><div class="h1">Hi, I'm <span class="gt">Punte</span></div>
+  <p class="mu" style="margin:0;max-width:440px">I can see you, talk with you and remember what matters. Connect me to get started.</p>
+  <div class="row" style="margin-top:20px;flex-wrap:wrap"><button class="btn pri" id="mic" aria-label="Talk">&#127908; Talk</button><button class="btn" id="learn">Learn face</button></div>
+  <div class="statusline"><span class="mu">Punte status</span><b id="st2">Idle</b></div></div>
+  <div class="oled" id="face" data-f><i class="e"></i><i class="e"></i></div></div>
+ <div class="card"><h2>Camera</h2><div class="vbox"><video id="v" autoplay muted playsinline></video><div class="vph" id="vph">Camera starts when you connect</div></div>
+  <div class="row" style="margin-top:12px;justify-content:space-between"><span class="mu">Seen</span><b id="who2">-</b></div></div>
+ <div class="card"><h2>At a glance</h2><div class="stats"><div class="st"><b id="n-faces">0</b><span>People I know</span></div><div class="st"><b id="n-facts">0</b><span>Things I remember</span></div><div class="st"><b id="n-chat">0</b><span>Recent messages</span></div></div>
+  <div class="line"><span class="mu">Punte address</span><b id="h-ip">-</b></div><div class="line"><span class="mu">Ollama</span><b id="h-ol"></b></div><div class="line"><span class="mu">AI model</span><b id="h-md"></b></div></div>
+</section>
+
+<section class="view" id="v-chat" hidden><div class="card"><h2>Conversation</h2><div id="log"></div>
+ <div class="row" style="margin-top:12px;flex-wrap:wrap" id="sugs"></div>
+ <div class="row" style="margin-top:14px"><input type="text" id="txt" placeholder="Type to talk" aria-label="Type to talk"><button class="btn pri" id="snd">Send</button><button class="btn mic" id="mic2" aria-label="Talk">&#127908;</button></div></div></section>
+
+<section class="view g2" id="v-control" hidden>
+ <div class="card"><h2>Expression</h2><div class="oled mini" id="face2" data-f><i class="e"></i><i class="e"></i></div><div class="gr c4" id="ex"></div></div>
+ <div class="card"><h2>Head</h2><div class="gr c3">
+  <button class="btn" data-c="r:-45">Left 45&deg;</button><button class="btn" data-c="p:0">Front</button><button class="btn" data-c="r:45">Right 45&deg;</button>
+  <button class="btn" data-c="p:180">Back</button><button class="btn" data-c="r:360">Spin 360&deg;</button></div>
+  <div class="line" style="margin-top:10px"><span>Auto-track face</span><button class="tg" id="trk" role="switch" aria-label="Auto-track face"></button></div></div>
+ <div class="card"><h2>Music</h2><label for="song">Song</label><select id="song"><option value="0">Song 1</option><option value="1">Song 2</option><option value="2">Song 3</option></select>
+  <div class="row" style="margin-top:12px"><button class="btn pri" id="play" style="flex:1">Play</button><button class="btn" id="stop" style="flex:1">Stop</button></div></div>
+</section>
+
+<section class="view g2" id="v-memory" hidden>
+ <div class="card"><h2>Previous conversations</h2><div class="tl" id="tl"></div><div class="row" style="margin-top:14px"><button class="btn" id="clrchat">Clear conversations</button></div></div>
+ <div class="card"><h2>Saved information</h2><div class="chips" id="facts"></div><button class="btn" id="addfact">+ Add information</button>
+  <h2 style="margin-top:24px">People I know</h2><div id="ppl"></div><button class="btn" id="learn2" style="margin-top:10px">+ Learn a new face</button></div>
+</section>
+
+<section class="view g2" id="v-settings" hidden>
+ <div class="card"><h2>Connection</h2><label for="ip">Punte address</label><input type="text" id="ip" placeholder="192.168.x.x">
+  <label for="ol">Ollama endpoint</label><input type="text" id="ol" value="http://localhost:11434"><label for="md">AI model</label><input type="text" id="md" value="llama3.2:3b">
+  <button class="btn pri" id="save" style="margin-top:16px;width:100%">Save and connect</button></div>
+ <div class="card"><h2>Voice</h2><label for="vc">Voice</label><select id="vc"></select><label for="rt">Speaking speed</label><input type="range" id="rt" min="0.6" max="1.4" step="0.1" value="1" style="width:100%">
+  <h2 style="margin-top:24px">Notifications</h2><div class="line"><div>Greet people I know<small>Say hello when a known face appears</small></div><button class="tg" id="t-greet" role="switch" aria-label="Greet people"></button></div></div>
+ <div class="card"><h2>Privacy</h2><div class="line"><div>Camera<small>Face tracking and recognition</small></div><button class="tg" id="t-cam" role="switch" aria-label="Camera"></button></div>
+  <div class="line"><div>Microphone<small>Voice input</small></div><button class="tg" id="t-mic" role="switch" aria-label="Microphone"></button></div></div>
+ <div class="card"><h2>Memory settings</h2><div class="line"><div>Remember conversations<small>Keep recent chats</small></div><button class="tg" id="t-rem" role="switch" aria-label="Remember conversations"></button></div>
+  <div class="row" style="margin-top:12px"><button class="btn" id="clr2">Clear conversations</button><button class="btn" id="clrall" style="color:#F87171">Clear all memory</button></div></div>
+</section>
+</div></div>
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+<script src="script.js"></script></body></html>
