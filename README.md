@@ -43,22 +43,30 @@ An optional seventh container, `ollama`, can run the AI on the server (`--profil
 
 ## Where the AI runs
 
-Punte uses only local models (no cloud account, no usage limit). In Settings, "Who answers questions" is `Automatic` by default: the website asks Ollama on the same computer first (`llama3.1:8b`, fast on a computer with a graphics card) and uses the server's `ollama` container (`llama3.2:3b`) when there is none, for example on a phone. Details are in [docs/troubleshooting.md](docs/troubleshooting.md).
+Punte uses only local models (no cloud account, no usage limit). In Settings, "Who answers questions" is `Automatic` by default: the website asks Ollama on the same computer first (`llama3.1:8b`, fast on a computer with a graphics card) and uses the server's `ollama` container (`llama3.2:3b`) when there is none, for example on a phone. Details are in [docs/troubleshooting.md](implementation/docs/troubleshooting.md).
 
 ## Folders
 
-- `frontend/` React website (Vite)
-- `backend/` Node.js server
-- `database/` table script and backup scripts
-- `tts/` the robot's voice (Piper)
-- `stt/` the robot's ears (faster-whisper)
-- `proxy/` Caddy settings
-- `docker/` `docker-compose.yml` and `.env.example`
-- `firmware/desktop_body/` ESP32 code (Arduino)
-- `firmware/esp32_cam/` ESP32-CAM code (Arduino)
-- `infra/` Azure setup, VM setup, deploy, backup and alert scripts
-- `docs/` deploy guide and troubleshooting
+The repo follows the SDLC phases:
+
+- `planning/` system request, feasibility analysis, staffing plan, project standards, risk assessment
+- `analysis/` requirements and models
+- `design/` architecture, hardware and UI design
+- `implementation/` the working system:
+  - `frontend/` React website (Vite)
+  - `backend/` Node.js server
+  - `database/` table script and backup scripts
+  - `tts/` the robot's voice (Piper)
+  - `stt/` the robot's ears (faster-whisper)
+  - `proxy/` Caddy settings
+  - `docker/` `docker-compose.yml` and `.env.example`
+  - `firmware/desktop_body/` ESP32 code (Arduino)
+  - `firmware/esp32_cam/` ESP32-CAM code (Arduino)
+  - `infra/` Azure setup, VM setup, deploy, backup and alert scripts
+  - `docs/` deploy guide and troubleshooting
 - `.github/workflows/` automatic tests and the uptime check
+
+Paths in the steps below are inside `implementation/`.
 
 ## Run it on your computer
 
@@ -71,7 +79,7 @@ Check that all six containers are healthy with `docker compose ps`, and the whol
 
 ## Put it on Azure
 
-Step by step in [docs/deploy.md](docs/deploy.md). If something is wrong, see [docs/troubleshooting.md](docs/troubleshooting.md).
+Step by step in [docs/deploy.md](implementation/docs/deploy.md). If something is wrong, see [docs/troubleshooting.md](implementation/docs/troubleshooting.md).
 
 ## Tests
 

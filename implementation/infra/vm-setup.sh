@@ -21,7 +21,7 @@ if docker info >/dev/null 2>&1; then DOCKER=docker; else DOCKER="sudo docker"; f
 if [ -d "$DIR/.git" ]; then git -C "$DIR" pull --ff-only; else git clone "$REPO" "$DIR"; fi
 
 # the settings file with the real passwords, only created once and never committed
-ENV_FILE="$DIR/docker/.env"
+ENV_FILE="$DIR/implementation/docker/.env"
 if [ ! -f "$ENV_FILE" ]; then
   read -r -p "Domain [$DEFAULT_DOMAIN]: " DOMAIN
   DOMAIN=${DOMAIN:-$DEFAULT_DOMAIN}
@@ -40,7 +40,7 @@ ENV
 fi
 
 # start everything and wait until the containers are healthy
-cd "$DIR/docker"
+cd "$DIR/implementation/docker"
 $DOCKER compose up -d --build --wait --wait-timeout 300
 $DOCKER compose ps
 echo "open https://$(grep '^DOMAIN=' .env | cut -d= -f2)"

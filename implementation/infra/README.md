@@ -12,11 +12,11 @@ Scripts that build the cloud side of Punte on Microsoft Azure and keep it up to 
 2. Get the code and run the setup script:
    ```
    git clone https://github.com/asim-stha/punte.git
-   bash punte/infra/azure-setup.sh
+   bash punte/implementation/infra/azure-setup.sh
    ```
 3. Connect to the VM with the `ssh` line the script prints, then run on the VM:
    ```
-   curl -fsSLO https://raw.githubusercontent.com/asim-stha/punte/main/infra/vm-setup.sh
+   curl -fsSLO https://raw.githubusercontent.com/asim-stha/punte/main/implementation/infra/vm-setup.sh
    bash vm-setup.sh
    ```
 4. Open `https://<the address>` and log in.

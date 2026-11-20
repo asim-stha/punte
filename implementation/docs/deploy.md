@@ -14,7 +14,7 @@ From an empty Azure account to the live site. Every script is in `infra/`.
 2. Run:
    ```
    git clone https://github.com/asim-stha/punte.git
-   bash punte/infra/azure-setup.sh
+   bash punte/implementation/infra/azure-setup.sh
    ```
 3. Write down the storage account name and the `ssh` line it prints.
 
@@ -23,7 +23,7 @@ From an empty Azure account to the live site. Every script is in `infra/`.
 1. Connect with the `ssh` line from step 1.
 2. On the VM run:
    ```
-   curl -fsSLO https://raw.githubusercontent.com/asim-stha/punte/main/infra/vm-setup.sh
+   curl -fsSLO https://raw.githubusercontent.com/asim-stha/punte/main/implementation/infra/vm-setup.sh
    bash vm-setup.sh
    ```
 3. Type the website password and the ESP token when it asks. Use the same token in `firmware/desktop_body/secrets.h`.
@@ -44,7 +44,7 @@ It makes one backup right away and lists the backups in Azure. After that a back
 In Cloud Shell:
 
 ```
-bash punte/infra/azure-alerts.sh <your email>
+bash punte/implementation/infra/azure-alerts.sh <your email>
 ```
 
 If a part is skipped, set it by hand in the portal:
